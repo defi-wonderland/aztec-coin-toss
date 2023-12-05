@@ -1,1 +1,1 @@
-# aztec-coin-toss
+# Aztec coin toss
