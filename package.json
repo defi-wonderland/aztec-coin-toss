@@ -6,8 +6,7 @@
   "scripts": {
     "compile": "aztec-cli compile . -o './src/app/src/abis/cointoss' -i './src/app/src/abis/cointoss' -ts './src/app/src/abis/cointoss'",
     "test": "yarn compile && NODE_NO_WARNINGS=1 node --experimental-vm-modules $(yarn bin jest) --runInBand --passWithNoTests --testTimeout=15000",
-    "start:dev": "yarn --cwd ./src/app start:dev",
-    "postinstall": "yarn --cwd ./src/app"
+    "start:dev": "yarn --cwd ./src/app start:dev"
   },
   "jest": {
     "preset": "ts-jest/presets/default-esm",
@@ -26,11 +25,9 @@
     "rootDir": "./src"
   },
   "dependencies": {
-    "@aztec/aztec-sandbox": "0.15.1",
-    "@aztec/aztec.js": "0.15.1",
-    "@aztec/cli": "0.15.1",
-    "@aztec/foundation": "0.15.1",
-    "@aztec/types": "0.15.1",
+    "@aztec/aztec.js": "0.16.7",
+    "@aztec/foundation": "0.16.7",
+    "@aztec/types": "0.16.7",
     "@types/jest": "^29.5.5",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.1",
