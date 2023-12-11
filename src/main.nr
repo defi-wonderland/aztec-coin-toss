@@ -42,7 +42,7 @@ contract CoinToss {
     global HOUSE_ADDRESS_SLOT = 4;
     global BETS_SLOT = 5;
 
-
+    // TODO: add slow update tree to make the switch from private to public
     struct Storage {
         bet_amount: ImmutableSingleton<BetAmountNote, BET_AMOUNT_NOTE_LEN>,
         divinity: ImmutableSingleton<AddressNote, ADDRESS_NOTE_LEN>,
@@ -101,7 +101,7 @@ contract CoinToss {
         let house = storage.house.get_note().address;
 
         let mut user_bet: BetNote = BetNote::new(sender, bet);
-        storage.bets.insert(&mut user_bet, false);
+        storage.bets.insert(&mut user_bet, true);
 
         // // TODO: should check for funds availability
         let mut house_bet: BetNote = BetNote::new(house, !bet);
@@ -110,22 +110,22 @@ contract CoinToss {
 
     // Returns the bet amount
     unconstrained fn get_bet_amount_unconstrained() -> BetAmountNote {
-        storage.bet_amount.get_note()
+        storage.bet_amount.view_note()
     }
 
     // Returns the divinity address
     unconstrained fn get_divinity_unconstrained() -> AddressNote {
-        storage.divinity.get_note()
+        storage.divinity.view_note()
     }
 
     // Returns the private oracle address
     unconstrained fn get_private_oracle_unconstrained() -> AddressNote {
-        storage.private_oracle.get_note()
+        storage.private_oracle.view_note()
     }
 
     // Returns the house address
     unconstrained fn get_house_unconstrained() -> AddressNote {
-        storage.house.get_note()
+        storage.house.view_note()
     }
 
     unconstrained fn get_user_bets_unconstrained(user: AztecAddress, start_offset: u32) -> [Option<BetNote>; 10] {
