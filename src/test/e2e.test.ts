@@ -145,7 +145,7 @@ describe("E2E Coin Toss", () => {
       houseRandomness = bet.randomness;
     });
 
-    it("User and house should share the same randomness for notes, and therefore same nullifier", async () => {
+    it("User and house should share the same randomness for notes, and therefore same nullifier key", async () => {
       expect(userRandomness).toBe(houseRandomness);
     });
   });
