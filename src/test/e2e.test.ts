@@ -54,10 +54,14 @@ beforeAll(async () => {
 }, 120_000);
 
 describe("E2E Coin Toss", () => {
-  let USER_AND_HOUSE_BET_NOTES: UserAndHouseBetNotes;
+  let USER_BET_NOTES: BetNote[];
+  let FIRST_BET_NOTE: BetNote;
+  let userRandomness: bigint;
+  let houseRandomness: bigint;
 
   beforeAll(async () => {
-    USER_AND_HOUSE_BET_NOTES = createUserAndHouseBetNotes(4);
+    USER_BET_NOTES = createUserBetNotes(4);
+    FIRST_BET_NOTE = USER_BET_NOTES[0];
 
     // Deploy Coin Toss
     const coinTossReceipt = await CoinTossContract.deploy(
@@ -85,10 +89,9 @@ describe("E2E Coin Toss", () => {
 
   describe("create_bet(..)", () => {
     it("Tx to create_bet is mined", async () => {
-      const firstBet = USER_AND_HOUSE_BET_NOTES.userNotes[0].bet;
       const receipt = await coinToss
         .withWallet(user)
-        .methods.create_bet(firstBet)
+        .methods.create_bet(FIRST_BET_NOTE.bet)
         .send()
         .wait();
 
@@ -96,8 +99,6 @@ describe("E2E Coin Toss", () => {
     });
 
     it("User bet note should have the correct parameters", async () => {
-      const USER_BET_NOTE = USER_AND_HOUSE_BET_NOTES.userNotes[0];
-
       const bet: BetNote = BetNote.fromChainData(
         (
           await coinToss
@@ -107,47 +108,56 @@ describe("E2E Coin Toss", () => {
         )[0]._value
       );
 
-      // Check: Compare the note's data with the expected values
+      type BetNoteWithoutRandomness = Omit<BetNote, "randomness">;
 
-      const betNote = {
-        owner: USER_BET_NOTE.owner,
-        bet: USER_BET_NOTE.bet,
+      // Check: Compare the note's data with the expected values
+      const betNote: BetNoteWithoutRandomness = {
+        owner: FIRST_BET_NOTE.owner,
+        bet: FIRST_BET_NOTE.bet,
       };
 
       expect(bet).toEqual(expect.objectContaining(betNote));
+
+      // Store the random nullifier, for later comparison
+      userRandomness = bet.randomness;
     });
 
-    it("House bet note should have the correct parameters", async () => {
-      const HOUSE_BET_NOTE = USER_AND_HOUSE_BET_NOTES.houseNotes[0];
+    it("House should have the copy of the same note as the user with correct parameters", async () => {
       const bet: BetNote = BetNote.fromChainData(
         (
           await coinToss
             .withWallet(house)
-            .methods.get_user_bets_unconstrained(house.getAddress(), 0n)
-            .view({ from: user.getAddress() })
+            .methods.get_user_bets_unconstrained(user.getAddress(), 0n)
+            .view({ from: house.getAddress() })
         )[0]._value
       );
 
-      const betNote: BetNote = {
-        owner: HOUSE_BET_NOTE.owner,
-        bet: HOUSE_BET_NOTE.bet,
+      type BetNoteWithoutRandomness = Omit<BetNote, "randomness">;
+
+      const betNote: BetNoteWithoutRandomness = {
+        owner: FIRST_BET_NOTE.owner,
+        bet: FIRST_BET_NOTE.bet,
       };
 
       expect(bet).toEqual(expect.objectContaining(betNote));
+
+      // Store the random nullifier, for later comparison
+      houseRandomness = bet.randomness;
+    });
+
+    it("User and house should share the same randomness for notes, and therefore same nullifier", async () => {
+      expect(userRandomness).toBe(houseRandomness);
     });
   });
 
   describe("get_user_bets_unconstrained", () => {
     let SLICED_USER_BET_NOTES: BetNote[];
-    let SLICED_HOUSE_BET_NOTES: BetNote[];
 
     beforeAll(async () => {
       // Slicing the first one because it has already been mined
-      SLICED_USER_BET_NOTES = USER_AND_HOUSE_BET_NOTES.userNotes.slice(1);
-      SLICED_HOUSE_BET_NOTES = USER_AND_HOUSE_BET_NOTES.houseNotes.slice(1);
+      SLICED_USER_BET_NOTES = USER_BET_NOTES.slice(1);
 
       await sendBetBatch(SLICED_USER_BET_NOTES);
-      await sendBetBatch(SLICED_HOUSE_BET_NOTES);
     });
 
     it("returns the correct user bets to the user", async () => {
@@ -173,11 +183,11 @@ describe("E2E Coin Toss", () => {
       );
     });
 
-    it("returns the correct house bets to the house", async () => {
+    it("returns the correct user bets to the house", async () => {
       const bets: BetNote[] = (
         await coinToss
           .withWallet(house)
-          .methods.get_user_bets_unconstrained(house.getAddress(), 0n)
+          .methods.get_user_bets_unconstrained(user.getAddress(), 0n)
           .view({ from: house.getAddress() })
       )
         .filter((noteObj: any) => noteObj._is_some)
@@ -185,7 +195,7 @@ describe("E2E Coin Toss", () => {
 
       expect(bets).toEqual(
         expect.arrayContaining(
-          SLICED_HOUSE_BET_NOTES.map((betNote) => {
+          SLICED_USER_BET_NOTES.map((betNote) => {
             const bets = {
               owner: betNote.owner,
               bet: betNote.bet,
@@ -245,31 +255,20 @@ describe("E2E Coin Toss", () => {
   });
 });
 
-function createUserAndHouseBetNotes(number: number = 3): UserAndHouseBetNotes {
-  let userNote: BetNote;
-  let houseNote: BetNote;
-  let userNotes: BetNote[] = [];
-  let houseNotes: BetNote[] = [];
+function createUserBetNotes(number: number = 3): BetNote[] {
+  let betNote: BetNote;
+  let betNotes: BetNote[] = [];
 
   for (let i = 0; i < number; i++) {
-    userNote = BetNote.fromLocal({
+    betNote = BetNote.fromLocal({
       owner: user.getAddress(),
       bet: !!(i % 2), // 0: Heads, 1: Tails
     });
 
-    houseNote = BetNote.fromLocal({
-      owner: house.getAddress(),
-      bet: !userNote.bet,
-    });
-
-    userNotes.push(userNote);
-    houseNotes.push(houseNote);
+    betNotes.push(betNote);
   }
 
-  return {
-    userNotes,
-    houseNotes,
-  };
+  return betNotes;
 }
 
 const sendBetBatch = async (betNotes: BetNote[]) => {

@@ -58,13 +58,7 @@ impl BetNote {
     }
 
     fn compute_nullifier(self) -> Field {
-        let note_hash_for_nullify = compute_note_hash_for_read_or_nullify(BetNoteMethods, self);
-        let secret = get_secret_key(self.owner.address);
-        dep::std::hash::pedersen_hash([
-            note_hash_for_nullify,
-            secret.low,
-            secret.high,
-        ])
+        self.randomness
     }
 
     fn set_header(&mut self, header: NoteHeader) {

@@ -99,13 +99,18 @@ contract CoinToss {
     fn create_bet(bet: bool) {
         let sender = AztecAddress::new(context.msg_sender());
         let house = storage.house.get_note().address;
+        let address_this = AztecAddress::new(context.this_address()).address;
 
         let mut user_bet: BetNote = BetNote::new(sender, bet);
         storage.bets.insert(&mut user_bet, true);
 
-        // // TODO: should check for funds availability
-        let mut house_bet: BetNote = BetNote::new(house, !bet);
-        storage.bets.insert(&mut house_bet, true);
+        emit_encrypted_log(
+            &mut context,
+            address_this,
+            BETS_SLOT,
+            get_public_key(house.address),
+            user_bet.serialize(),
+        );
     }
 
     // Returns the bet amount
@@ -133,7 +138,7 @@ contract CoinToss {
         // https://github.com/AztecProtocol/aztec-packages/blob/2d498b352364debf59af940f0a69c453651a4ad0/yarn-project/aztec-nr/aztec/src/constants_gen.nr#L53
 
         // create the filter - limiting to 10 for future compatibility
-        let user_bets_getter_option = NoteViewerOptions::new().select(0, user.address).set_offset(start_offset).set_limit(10);
+        let user_bets_getter_option = NoteViewerOptions::new().select(0, user.address).set_offset(start_offset);
 
         // filter the notes and return the answer-
         storage.bets.view_notes(user_bets_getter_option)
