@@ -55,14 +55,14 @@ export class CoinTossContract extends ContractBase {
   /**
    * Creates a tx to deploy a new instance of this contract.
    */
-  public static deploy(wallet: Wallet, bet_amount: FieldLike, divinity: AztecAddressLike, private_oracle: AztecAddressLike, house: AztecAddressLike) {
+  public static deploy(wallet: Wallet, divinity: AztecAddressLike, private_oracle: AztecAddressLike, house: AztecAddressLike, bet_amount: FieldLike) {
     return new DeployMethod<CoinTossContract>(Point.ZERO, wallet, CoinTossContractArtifact, Array.from(arguments).slice(1));
   }
 
   /**
    * Creates a tx to deploy a new instance of this contract using the specified public key to derive the address.
    */
-  public static deployWithPublicKey(publicKey: PublicKey, wallet: Wallet, bet_amount: FieldLike, divinity: AztecAddressLike, private_oracle: AztecAddressLike, house: AztecAddressLike) {
+  public static deployWithPublicKey(publicKey: PublicKey, wallet: Wallet, divinity: AztecAddressLike, private_oracle: AztecAddressLike, house: AztecAddressLike, bet_amount: FieldLike) {
     return new DeployMethod<CoinTossContract>(publicKey, wallet, CoinTossContractArtifact, Array.from(arguments).slice(2));
   }
   
@@ -85,17 +85,8 @@ export class CoinTossContract extends ContractBase {
     /** create_bet(bet: boolean) */
     create_bet: ((bet: boolean) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** get_bet_amount_unconstrained() */
-    get_bet_amount_unconstrained: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
-
-    /** get_divinity_unconstrained() */
-    get_divinity_unconstrained: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
-
-    /** get_house_unconstrained() */
-    get_house_unconstrained: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
-
-    /** get_private_oracle_unconstrained() */
-    get_private_oracle_unconstrained: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** get_config_unconstrained() */
+    get_config_unconstrained: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** get_user_bets_unconstrained(user: struct, start_offset: integer) */
     get_user_bets_unconstrained: ((user: AztecAddressLike, start_offset: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;

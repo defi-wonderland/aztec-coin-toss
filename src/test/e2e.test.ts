@@ -18,11 +18,8 @@ import { CoinTossContract } from "../app/src/abis/cointoss/CoinToss.js";
 import { BetNote } from "../../types/Notes.js";
 import { initAztecJs } from "@aztec/aztec.js/init";
 
-const BET_AMOUNT_SLOT: Fr = new Fr(1);
-const DIVINITY_ADDRESS_SLOT: Fr = new Fr(2);
-const PRIVATE_ORACLE_ADDRESS_SLOT: Fr = new Fr(3);
-const HOUSE_ADDRESS_SLOT: Fr = new Fr(4);
-const BETS_SLOT: Fr = new Fr(5);
+const CONFIG_SLOT: Fr = new Fr(1);
+const BETS_SLOT: Fr = new Fr(2);
 
 const PRIVATE_ORACLE_ADDRESS = AztecAddress.fromBigInt(456n);
 const BET_AMOUNT = 1337n;
@@ -34,11 +31,6 @@ let user: AccountWalletWithPrivateKey;
 let house: AccountWalletWithPrivateKey;
 let divinity: AccountWalletWithPrivateKey;
 let deployer: AccountWalletWithPrivateKey;
-
-type UserAndHouseBetNotes = {
-  userNotes: BetNote[];
-  houseNotes: BetNote[];
-};
 
 // Setup: Set the sandbox
 beforeAll(async () => {
@@ -66,10 +58,10 @@ describe("E2E Coin Toss", () => {
     // Deploy Coin Toss
     const coinTossReceipt = await CoinTossContract.deploy(
       deployer,
-      BET_AMOUNT,
       divinity.getAddress(),
       PRIVATE_ORACLE_ADDRESS,
-      house.getAddress()
+      house.getAddress(),
+      BET_AMOUNT
     )
       .send()
       .wait();
@@ -80,7 +72,7 @@ describe("E2E Coin Toss", () => {
     await pxe.registerRecipient(coinToss.completeAddress);
 
     // Add all address notes to pxe
-    await addAddressNotesToPxe(
+    await addConfigNotesToPxe(
       user.getAddress(),
       coinToss.address,
       coinTossReceipt.txHash
@@ -211,46 +203,29 @@ describe("E2E Coin Toss", () => {
     });
   });
 
-  describe("get_house_unconstrained", () => {
-    it("returns the correct house address", async () => {
-      let storedHouse = await coinToss.methods.get_house_unconstrained().view();
-      expect(storedHouse.address.address).toEqual(
-        house.getAddress().toBigInt()
-      );
-    });
-  });
+  describe("get_config_unconstrained", () => {
+    it("returns the correct parameters for all configs", async () => {
+      type AddressObj = {
+        address: bigint;
+      };
 
-  describe("get_private_oracle_unconstrained", () => {
-    it("returns the correct private oracle address", async () => {
-      let storedPrivateOracle = await coinToss.methods
-        .get_private_oracle_unconstrained()
+      type ConfigNote = {
+        divinity: AddressObj;
+        private_oracle: AddressObj;
+        house: AddressObj;
+        bet_amount: bigint;
+      };
+
+      let config: ConfigNote = await coinToss.methods
+        .get_config_unconstrained()
         .view();
 
-      expect(storedPrivateOracle.address.address).toEqual(
-        PRIVATE_ORACLE_ADDRESS.toBigInt().valueOf()
+      expect(config.divinity.address).toEqual(divinity.getAddress().toBigInt());
+      expect(config.private_oracle.address).toEqual(
+        PRIVATE_ORACLE_ADDRESS.toBigInt()
       );
-    });
-  });
-
-  describe("get_divinity_unconstrained", () => {
-    it("returns the correct divinity address", async () => {
-      let storedDivinity = await coinToss.methods
-        .get_divinity_unconstrained()
-        .view();
-
-      expect(storedDivinity.address.address).toEqual(
-        divinity.getAddress().toBigInt().valueOf()
-      );
-    });
-  });
-
-  describe("get_bet_amount_unconstrained", () => {
-    it("returns the correct bet amount", async () => {
-      let storedBetAmount = await coinToss.methods
-        .get_bet_amount_unconstrained()
-        .view();
-
-      expect(storedBetAmount.amount).toEqual(BET_AMOUNT);
+      expect(config.house.address).toEqual(house.getAddress().toBigInt());
+      expect(config.bet_amount).toEqual(BET_AMOUNT);
     });
   });
 });
@@ -282,47 +257,23 @@ const sendBetBatch = async (betNotes: BetNote[]) => {
   await batchBets.send().wait();
 };
 
-const addAddressNotesToPxe = async (
+const addConfigNotesToPxe = async (
   user: AztecAddress,
   contract: AztecAddress,
   txHash: TxHash
 ) => {
-  await Promise.all([
-    pxe.addNote(
-      new ExtendedNote(
-        new Note([house.getAddress().toField()]),
-        user,
-        contract,
-        HOUSE_ADDRESS_SLOT,
-        txHash
-      )
-    ),
-    pxe.addNote(
-      new ExtendedNote(
-        new Note([PRIVATE_ORACLE_ADDRESS.toField()]),
-        user,
-        contract,
-        PRIVATE_ORACLE_ADDRESS_SLOT,
-        txHash
-      )
-    ),
-    pxe.addNote(
-      new ExtendedNote(
-        new Note([divinity.getAddress().toField()]),
-        user,
-        contract,
-        DIVINITY_ADDRESS_SLOT,
-        txHash
-      )
-    ),
-    pxe.addNote(
-      new ExtendedNote(
-        new Note([new Fr(BET_AMOUNT)]),
-        user,
-        contract,
-        BET_AMOUNT_SLOT,
-        txHash
-      )
-    ),
-  ]);
+  const divinityAsFr = divinity.getAddress().toField();
+  const privateOracleAsFr = PRIVATE_ORACLE_ADDRESS.toField();
+  const houseAsFr = house.getAddress().toField();
+  const betAmountAsFr = new Fr(BET_AMOUNT);
+
+  await pxe.addNote(
+    new ExtendedNote(
+      new Note([divinityAsFr, privateOracleAsFr, houseAsFr, betAmountAsFr]),
+      user,
+      contract,
+      CONFIG_SLOT,
+      txHash
+    )
+  );
 };
