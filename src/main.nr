@@ -1,24 +1,100 @@
 mod types;
- 
+
 contract CoinToss {
     use dep::aztec::context::Context;
+    use crate::types::bet_note::{BetNote, BetNoteMethods, BET_NOTE_LEN};
+    use crate::types::config_note::{ConfigNote, ConfigNoteMethods, CONFIG_NOTE_LEN};
 
+    use dep::aztec::note::{
+        note_getter_options::NoteGetterOptions,
+        note_header::NoteHeader,
+        note_interface::NoteInterface,
+        note_viewer_options::NoteViewerOptions,
+        utils as note_utils
+    };
+
+    use dep::std::option::Option;
+
+    use dep::aztec::log::emit_encrypted_log;
+    use dep::aztec::oracle::{
+        get_public_key::get_public_key,
+        rand::rand
+    };
+    use dep::aztec::state_vars::{
+        public_state::PublicState,
+        map::Map,
+        set::Set,
+        immutable_singleton::ImmutableSingleton
+    };
+    use dep::aztec::selector::compute_selector;
+    use dep::aztec::types::address::AztecAddress;
+
+
+    global CONFIG_NOTE_SLOT = 1;
+    global BETS_SLOT = 2;
+
+    // TODO: add slow update tree to make the switch from private to public
     struct Storage {
+        config: ImmutableSingleton<ConfigNote, CONFIG_NOTE_LEN>,
+        bets: Set<BetNote, BET_NOTE_LEN>,
     }
 
     impl Storage {
         fn init(context: Context) -> Self {
             Storage {
+                config: ImmutableSingleton::new(
+                    context,
+                    CONFIG_NOTE_SLOT,
+                    ConfigNoteMethods,
+                ),
+                bets: Set::new(context, BETS_SLOT, BetNoteMethods)
             }
         }
     }
- 
+
     // Constructs the contract.
     #[aztec(private)]
-    fn constructor() {}
+    fn constructor(divinity: AztecAddress, private_oracle: AztecAddress, house: AztecAddress, bet_amount: Field) {
+        let mut config_note = ConfigNote::new(divinity, private_oracle, house, bet_amount);
+        storage.config.initialize(&mut config_note, Option::none(), false);
+    }
+
+    #[aztec(private)]
+    fn create_bet(bet: bool) {
+        let sender = AztecAddress::new(context.msg_sender());
+        let house = storage.config.get_note().house;
+        let address_this = AztecAddress::new(context.this_address()).address;
+
+        let mut user_bet: BetNote = BetNote::new(sender, bet);
+        storage.bets.insert(&mut user_bet, true);
+
+        emit_encrypted_log(
+            &mut context,
+            address_this,
+            BETS_SLOT,
+            get_public_key(house.address),
+            user_bet.serialize(),
+        );
+    }
+
+    // Returns the divinity address
+    unconstrained fn get_config_unconstrained() -> ConfigNote {
+        storage.config.view_note()
+    }
+
+    unconstrained fn get_user_bets_unconstrained(user: AztecAddress, start_offset: u32) -> [Option<BetNote>; 10] {
+        let user_bets_getter_option = NoteViewerOptions::new().select(0, user.address).set_offset(start_offset);
+        storage.bets.view_notes(user_bets_getter_option)
+    }
 
     // Computes note hash and nullifier.
-    unconstrained fn compute_note_hash_and_nullifier(contract_address: Field, nonce: Field, storage_slot: Field, preimage: [Field; 0]) -> [Field; 1] {
-        [0]
+    unconstrained fn compute_note_hash_and_nullifier(contract_address: Field, nonce: Field, storage_slot: Field, preimage: [Field; CONFIG_NOTE_LEN]) -> [Field; 4] {
+        let note_header = NoteHeader::new(contract_address, nonce, storage_slot);
+
+        if(storage_slot == BETS_SLOT) {
+            note_utils::compute_note_hash_and_nullifier(BetNoteMethods, note_header, preimage)
+        } else {
+            note_utils::compute_note_hash_and_nullifier(ConfigNoteMethods, note_header, preimage)
+        }
     }
 }

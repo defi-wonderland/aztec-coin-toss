@@ -1,42 +1,34 @@
 import {
   Fr,
   PXE,
-  computeMessageSecretHash,
   createAccount,
   createPXEClient,
   getSandboxAccountsWallets,
   waitForSandbox,
   AztecAddress,
   AccountWalletWithPrivateKey,
-  computeAuthWitMessageHash,
   TxHash,
   ExtendedNote,
   Note,
+  BatchCall,
 } from "@aztec/aztec.js";
 
-import { TokenContract } from "../app/src/abis/token/Token.js";
+import { CoinTossContract } from "../app/src/abis/cointoss/CoinToss.js";
 
-import { PrivateOracleContract } from "../app/src/abis/oracle/PrivateOracle.js";
+import { BetNote } from "../../types/Notes.js";
+import { initAztecJs } from "@aztec/aztec.js/init";
 
-const PAYMENT_TOKEN_SLOT: Fr = new Fr(1);
-const FEE_SLOT: Fr = new Fr(2);
-const QUESTIONS_SLOT: Fr = new Fr(3);
-const ANSWERS_SLOT: Fr = new Fr(4);
+const CONFIG_SLOT: Fr = new Fr(1);
+const BETS_SLOT: Fr = new Fr(2);
 
-const QUESTION = 123n;
-const ANSWER = 456n;
-const ALTERNATIVE_ANSWER = 789n;
-const FEE = 1000n;
-const MINT_AMOUNT = 10000n;
-
-const ADDRESS_ZERO = AztecAddress.fromBigInt(0n);
+const PRIVATE_ORACLE_ADDRESS = AztecAddress.fromBigInt(456n);
+const BET_AMOUNT = 1337n;
 
 let pxe: PXE;
-let oracle: PrivateOracleContract;
-let token: TokenContract;
+let coinToss: CoinTossContract;
 
-let requester: AccountWalletWithPrivateKey;
-let requester2: AccountWalletWithPrivateKey;
+let user: AccountWalletWithPrivateKey;
+let house: AccountWalletWithPrivateKey;
 let divinity: AccountWalletWithPrivateKey;
 let deployer: AccountWalletWithPrivateKey;
 
@@ -45,149 +37,243 @@ beforeAll(async () => {
   const { SANDBOX_URL = "http://localhost:8080" } = process.env;
   pxe = createPXEClient(SANDBOX_URL);
 
-  [, [requester, requester2, divinity], deployer] = await Promise.all([
+  [, [user, house, divinity], deployer] = await Promise.all([
     waitForSandbox(pxe),
     getSandboxAccountsWallets(pxe),
     createAccount(pxe),
   ]);
-}, 60_000);
+  await initAztecJs();
+}, 120_000);
 
 describe("E2E Coin Toss", () => {
+  let USER_BET_NOTES: BetNote[];
+  let FIRST_BET_NOTE: BetNote;
+  let userRandomness: bigint;
+  let houseRandomness: bigint;
 
   beforeAll(async () => {
-    // Deploy the token
-    token = await TokenContract.deploy(deployer, requester.getAddress())
-      .send()
-      .deployed();
+    USER_BET_NOTES = createUserBetNotes(4);
+    FIRST_BET_NOTE = USER_BET_NOTES[0];
 
-    // Mint tokens for the requester
-    await mintTokenFor(requester, requester, MINT_AMOUNT);
-
-    // Deploy the oracle
-    const receipt = await PrivateOracleContract.deploy(
+    // Deploy Coin Toss
+    const coinTossReceipt = await CoinTossContract.deploy(
       deployer,
-      token.address,
-      FEE
+      divinity.getAddress(),
+      PRIVATE_ORACLE_ADDRESS,
+      house.getAddress(),
+      BET_AMOUNT
     )
       .send()
       .wait();
-    oracle = receipt.contract;
+
+    coinToss = coinTossReceipt.contract;
 
     // Add the contract public key to the PXE
-    await pxe.registerRecipient(oracle.completeAddress);
+    await pxe.registerRecipient(coinToss.completeAddress);
 
-    await addTokenAndFeeNotesToPXE(
-      requester.getAddress(),
-      oracle.address,
-      token.address,
-      FEE,
-      receipt.txHash
+    // Add all address notes to pxe
+    await addConfigNotesToPxe(
+      user.getAddress(),
+      coinToss.address,
+      coinTossReceipt.txHash
     );
-  }, 60_000);
+  }, 120_000);
 
-  it('passes', () => {
-    expect(true).toBe(true);
-  })
+  describe("create_bet(..)", () => {
+    it("Tx to create_bet is mined", async () => {
+      const receipt = await coinToss
+        .withWallet(user)
+        .methods.create_bet(FIRST_BET_NOTE.bet)
+        .send()
+        .wait();
+
+      expect(receipt.status).toBe("mined");
+    });
+
+    it("User bet note should have the correct parameters", async () => {
+      const bet: BetNote = BetNote.fromChainData(
+        (
+          await coinToss
+            .withWallet(user)
+            .methods.get_user_bets_unconstrained(user.getAddress(), 0n)
+            .view({ from: user.getAddress() })
+        )[0]._value
+      );
+
+      type BetNoteWithoutRandomness = Omit<BetNote, "randomness">;
+
+      // Check: Compare the note's data with the expected values
+      const betNote: BetNoteWithoutRandomness = {
+        owner: FIRST_BET_NOTE.owner,
+        bet: FIRST_BET_NOTE.bet,
+      };
+
+      expect(bet).toEqual(expect.objectContaining(betNote));
+
+      // Store the random nullifier, for later comparison
+      userRandomness = bet.randomness;
+    });
+
+    it("House should have the copy of the same note as the user with correct parameters", async () => {
+      const bet: BetNote = BetNote.fromChainData(
+        (
+          await coinToss
+            .withWallet(house)
+            .methods.get_user_bets_unconstrained(user.getAddress(), 0n)
+            .view({ from: house.getAddress() })
+        )[0]._value
+      );
+
+      type BetNoteWithoutRandomness = Omit<BetNote, "randomness">;
+
+      const betNote: BetNoteWithoutRandomness = {
+        owner: FIRST_BET_NOTE.owner,
+        bet: FIRST_BET_NOTE.bet,
+      };
+
+      expect(bet).toEqual(expect.objectContaining(betNote));
+
+      // Store the random nullifier, for later comparison
+      houseRandomness = bet.randomness;
+    });
+
+    it("User and house should share the same randomness for notes, and therefore same nullifier key", async () => {
+      expect(userRandomness).toBe(houseRandomness);
+    });
+  });
+
+  describe("get_user_bets_unconstrained", () => {
+    let SLICED_USER_BET_NOTES: BetNote[];
+
+    beforeAll(async () => {
+      // Slicing the first one because it has already been mined
+      SLICED_USER_BET_NOTES = USER_BET_NOTES.slice(1);
+
+      await sendBetBatch(SLICED_USER_BET_NOTES);
+    });
+
+    it("returns the correct user bets to the user", async () => {
+      const bets: BetNote[] = (
+        await coinToss
+          .withWallet(user)
+          .methods.get_user_bets_unconstrained(user.getAddress(), 0n)
+          .view({ from: user.getAddress() })
+      )
+        .filter((noteObj: any) => noteObj._is_some)
+        .map((betNote: any) => BetNote.fromChainData(betNote._value));
+
+      expect(bets).toEqual(
+        expect.arrayContaining(
+          SLICED_USER_BET_NOTES.map((betNote) => {
+            const bets = {
+              owner: betNote.owner,
+              bet: betNote.bet,
+            };
+            return expect.objectContaining(bets);
+          })
+        )
+      );
+    });
+
+    it("returns the correct user bets to the house", async () => {
+      const bets: BetNote[] = (
+        await coinToss
+          .withWallet(house)
+          .methods.get_user_bets_unconstrained(user.getAddress(), 0n)
+          .view({ from: house.getAddress() })
+      )
+        .filter((noteObj: any) => noteObj._is_some)
+        .map((betNote: any) => BetNote.fromChainData(betNote._value));
+
+      expect(bets).toEqual(
+        expect.arrayContaining(
+          SLICED_USER_BET_NOTES.map((betNote) => {
+            const bets = {
+              owner: betNote.owner,
+              bet: betNote.bet,
+            };
+            return expect.objectContaining(bets);
+          })
+        )
+      );
+    });
+
+    it.skip("returns the correct questions when using an offset", async () => {
+      // Implement based on questions offset test
+    });
+  });
+
+  describe("get_config_unconstrained", () => {
+    it("returns the correct parameters for all configs", async () => {
+      type AddressObj = {
+        address: bigint;
+      };
+
+      type ConfigNote = {
+        divinity: AddressObj;
+        private_oracle: AddressObj;
+        house: AddressObj;
+        bet_amount: bigint;
+      };
+
+      let config: ConfigNote = await coinToss.methods
+        .get_config_unconstrained()
+        .view();
+
+      expect(config.divinity.address).toEqual(divinity.getAddress().toBigInt());
+      expect(config.private_oracle.address).toEqual(
+        PRIVATE_ORACLE_ADDRESS.toBigInt()
+      );
+      expect(config.house.address).toEqual(house.getAddress().toBigInt());
+      expect(config.bet_amount).toEqual(BET_AMOUNT);
+    });
+  });
 });
 
-const createAuthEscrowMessage = async (
-  token: TokenContract,
-  from: AccountWalletWithPrivateKey,
-  agent: AztecAddress,
-  participants: AztecAddress[],
-  amount: any
-) => {
-  const nonce = Fr.random();
+function createUserBetNotes(number: number = 3): BetNote[] {
+  let betNote: BetNote;
+  let betNotes: BetNote[] = [];
 
-  // We need to compute the message we want to sign and add it to the wallet as approved
-  const action = token.methods.escrow(
-    from.getAddress(),
-    agent,
-    amount,
-    participants,
-    nonce
+  for (let i = 0; i < number; i++) {
+    betNote = BetNote.fromLocal({
+      owner: user.getAddress(),
+      bet: !!(i % 2), // 0: Heads, 1: Tails
+    });
+
+    betNotes.push(betNote);
+  }
+
+  return betNotes;
+}
+
+const sendBetBatch = async (betNotes: BetNote[]) => {
+  const batchBets = new BatchCall(
+    user,
+    betNotes.map((betNote) =>
+      coinToss.methods.create_bet(betNote.bet).request()
+    )
   );
-  const messageHash = await computeAuthWitMessageHash(agent, action.request());
 
-  // Both wallets are connected to same node and PXE so we could just insert directly using
-  // await wallet.signAndAddAuthWitness(messageHash, );
-  // But doing it in two actions to show the flow.
-  const witness = await from.createAuthWitness(messageHash);
-  await from.addAuthWitness(witness);
-  return nonce;
+  await batchBets.send().wait();
 };
 
-const addTokenAndFeeNotesToPXE = async (
-  requester: AztecAddress,
-  oracle: AztecAddress,
-  token: AztecAddress,
-  fee: bigint,
+const addConfigNotesToPxe = async (
+  user: AztecAddress,
+  contract: AztecAddress,
   txHash: TxHash
 ) => {
-  await Promise.all([
-    // Add note for the payment token
-    pxe.addNote(
-      new ExtendedNote(
-        new Note([token.toField()]),
-        requester,
-        oracle,
-        PAYMENT_TOKEN_SLOT,
-        txHash
-      )
-    ),
-
-    // Add note for the fee
-    pxe.addNote(
-      new ExtendedNote(
-        new Note([new Fr(fee)]),
-        requester,
-        oracle,
-        FEE_SLOT,
-        txHash
-      )
-    ),
-  ]);
-};
-
-const addPendingShieldNoteToPXE = async (
-  account: AccountWalletWithPrivateKey,
-  amount: bigint,
-  secretHash: Fr,
-  txHash: TxHash
-) => {
-  const storageSlot = new Fr(5); // The storage slot of `pending_shields` is 5.
+  const divinityAsFr = divinity.getAddress().toField();
+  const privateOracleAsFr = PRIVATE_ORACLE_ADDRESS.toField();
+  const houseAsFr = house.getAddress().toField();
+  const betAmountAsFr = new Fr(BET_AMOUNT);
 
   await pxe.addNote(
     new ExtendedNote(
-      new Note([new Fr(amount), secretHash]),
-      account.getAddress(),
-      token.address,
-      storageSlot,
+      new Note([divinityAsFr, privateOracleAsFr, houseAsFr, betAmountAsFr]),
+      user,
+      contract,
+      CONFIG_SLOT,
       txHash
     )
   );
-};
-
-const mintTokenFor = async (
-  account: AccountWalletWithPrivateKey,
-  minter: AccountWalletWithPrivateKey,
-  amount: bigint
-) => {
-  // Mint private tokens
-  const secret = Fr.random();
-  const secretHash = await computeMessageSecretHash(secret);
-
-  const recipt = await token
-    .withWallet(minter)
-    .methods.mint_private(amount, secretHash)
-    .send()
-    .wait();
-
-  await addPendingShieldNoteToPXE(minter, amount, secretHash, recipt.txHash);
-
-  await token
-    .withWallet(minter)
-    .methods.redeem_shield(account.getAddress(), amount, secret)
-    .send()
-    .wait();
 };
