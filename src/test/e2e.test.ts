@@ -15,13 +15,13 @@ import {
 
 import { CoinTossContract } from "../app/src/abis/cointoss/CoinToss.js";
 
-import { BetNote } from "../../types/Notes.js";
+import { BetNote, ResultNote } from "../../types/Notes.js";
 import { initAztecJs } from "@aztec/aztec.js/init";
 
 const CONFIG_SLOT: Fr = new Fr(1);
 const BETS_SLOT: Fr = new Fr(2);
+const RESULT_SLOT: Fr = new Fr(3);
 
-const PRIVATE_ORACLE_ADDRESS = AztecAddress.fromBigInt(456n);
 const BET_AMOUNT = 1337n;
 
 let pxe: PXE;
@@ -31,15 +31,17 @@ let user: AccountWalletWithPrivateKey;
 let house: AccountWalletWithPrivateKey;
 let divinity: AccountWalletWithPrivateKey;
 let deployer: AccountWalletWithPrivateKey;
+let mock_oracle: AccountWalletWithPrivateKey;
 
 // Setup: Set the sandbox
 beforeAll(async () => {
   const { SANDBOX_URL = "http://localhost:8080" } = process.env;
   pxe = createPXEClient(SANDBOX_URL);
 
-  [, [user, house, divinity], deployer] = await Promise.all([
+  [, [user, house, divinity], deployer, mock_oracle] = await Promise.all([
     waitForSandbox(pxe),
     getSandboxAccountsWallets(pxe),
+    createAccount(pxe),
     createAccount(pxe),
   ]);
   await initAztecJs();
@@ -59,7 +61,7 @@ describe("E2E Coin Toss", () => {
     const coinTossReceipt = await CoinTossContract.deploy(
       deployer,
       divinity.getAddress(),
-      PRIVATE_ORACLE_ADDRESS,
+      mock_oracle.getAddress(),
       house.getAddress(),
       BET_AMOUNT
     )
@@ -139,6 +141,81 @@ describe("E2E Coin Toss", () => {
 
     it("User and house should share the same randomness for notes, and therefore same nullifier key", async () => {
       expect(userRandomness).toBe(houseRandomness);
+    });
+  });
+
+  describe("oracle_callback(..)", () => {
+    let callback_data: bigint[];
+
+    beforeAll(async () => {
+      await coinToss
+        .withWallet(user)
+        .methods.create_bet(FIRST_BET_NOTE.bet)
+        .send()
+        .wait();
+
+      const bet: BetNote = BetNote.fromChainData(
+        (
+          await coinToss
+            .withWallet(user)
+            .methods.get_user_bets_unconstrained(user.getAddress(), 0n)
+            .view({ from: user.getAddress() })
+        )[0]._value
+      );
+
+      callback_data = [
+        user.getAddress().toBigInt(),
+        bet.randomness,
+        0n,
+        0n,
+        0n,
+      ];
+    });
+
+    it("cannot be called by an address which is not the oracle", async () => {
+      await expect(
+        coinToss
+          .withWallet(user)
+          .methods.oracle_callback(1n, callback_data)
+          .send()
+          .wait()
+      ).rejects.toThrow("Unauthorized callback");
+    });
+
+    it("callable by the oracle address", async () => {
+      const receipt = await coinToss
+        .withWallet(mock_oracle)
+        .methods.oracle_callback(1n, callback_data)
+        .send()
+        .wait();
+
+      expect(receipt.status).toBe("mined");
+    });
+
+    it("creates a result note to the user", async () => {
+      const result_notes = await coinToss
+        .withWallet(user)
+        .methods.get_results_unconstrained(user.getAddress(), 0n)
+        .view({ from: user.getAddress() });
+
+      const result_note = ResultNote.fromChainData(result_notes[0]._value);
+
+      expect(result_note).toEqual(
+        new ResultNote(user.getAddress(), callback_data[1], true)
+      );
+    });
+
+    it("creates a result note to the house", async () => {
+      const result_notes = await coinToss
+        .withWallet(house)
+        .methods.get_results_unconstrained(house.getAddress(), 0n)
+        .view({ from: house.getAddress() });
+
+      const result_note = ResultNote.fromChainData(result_notes[0]._value);
+
+      expect(result_note).toEqual(
+        new ResultNote(house.getAddress(), callback_data[1], true)
+      );
     });
   });
 
@@ -222,7 +299,7 @@ describe("E2E Coin Toss", () => {
 
       expect(config.divinity.address).toEqual(divinity.getAddress().toBigInt());
       expect(config.private_oracle.address).toEqual(
-        PRIVATE_ORACLE_ADDRESS.toBigInt()
+        mock_oracle.getAddress().toBigInt()
       );
       expect(config.house.address).toEqual(house.getAddress().toBigInt());
       expect(config.bet_amount).toEqual(BET_AMOUNT);
@@ -263,7 +340,7 @@ const addConfigNotesToPxe = async (
   txHash: TxHash
 ) => {
   const divinityAsFr = divinity.getAddress().toField();
-  const privateOracleAsFr = PRIVATE_ORACLE_ADDRESS.toField();
+  const privateOracleAsFr = mock_oracle.getAddress().toField();
   const houseAsFr = house.getAddress().toField();
   const betAmountAsFr = new Fr(BET_AMOUNT);
 
