@@ -4,8 +4,6 @@ yarn-error.log
 
 # build
 target/
-types/
-!src/types/
 
 # MacOS frens:
 .DS_Store
