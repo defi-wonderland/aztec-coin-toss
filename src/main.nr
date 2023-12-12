@@ -4,7 +4,8 @@ contract CoinToss {
     use dep::aztec::context::Context;
     use crate::types::bet_note::{BetNote, BetNoteMethods, BET_NOTE_LEN};
     use crate::types::config_note::{ConfigNote, ConfigNoteMethods, CONFIG_NOTE_LEN};
-
+    use crate::types::result_note::{ResultNote, ResultNoteMethods, RESULT_NOTE_LEN};
+ 
     use dep::aztec::note::{
         note_getter_options::NoteGetterOptions,
         note_header::NoteHeader,
@@ -32,11 +33,13 @@ contract CoinToss {
 
     global CONFIG_NOTE_SLOT = 1;
     global BETS_SLOT = 2;
+    global RESULT_SLOT = 3;
 
     // TODO: add slow update tree to make the switch from private to public
     struct Storage {
         config: ImmutableSingleton<ConfigNote, CONFIG_NOTE_LEN>,
         bets: Set<BetNote, BET_NOTE_LEN>,
+        result: Set<ResultNote, RESULT_NOTE_LEN>
     }
 
     impl Storage {
@@ -47,7 +50,8 @@ contract CoinToss {
                     CONFIG_NOTE_SLOT,
                     ConfigNoteMethods,
                 ),
-                bets: Set::new(context, BETS_SLOT, BetNoteMethods)
+                bets: Set::new(context, BETS_SLOT, BetNoteMethods),
+                result: Set::new(context, RESULT_SLOT, ResultNoteMethods)
             }
         }
     }
@@ -75,6 +79,21 @@ contract CoinToss {
             get_public_key(house.address),
             user_bet.serialize(),
         );
+    }
+
+    // Callback triggered on submit_answer in the oracle (add the result to both the user and the house).
+    #[aztec(private)]
+    fn oracle_callback(answer: Field, data: [Field; 5]) {
+        let config_note = storage.config.get_note();
+        let sender = AztecAddress::new(context.msg_sender());
+
+        assert(sender.address == config_note.private_oracle.address, "Unauthorized callback");
+
+        let mut result_note_user = ResultNote::new(AztecAddress::new(data[0]), data[1], answer as bool);
+        let mut result_note_house = ResultNote::new(config_note.house, data[1], answer as bool);
+
+        storage.result.insert(&mut result_note_user, true);
+        storage.result.insert(&mut result_note_house, true);
     }
 
     // Returns the divinity address
