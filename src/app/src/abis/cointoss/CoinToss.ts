@@ -88,7 +88,16 @@ export class CoinTossContract extends ContractBase {
     /** get_config_unconstrained() */
     get_config_unconstrained: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
+    /** get_results_unconstrained(owner: struct, start_offset: integer) */
+    get_results_unconstrained: ((owner: AztecAddressLike, start_offset: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
     /** get_user_bets_unconstrained(user: struct, start_offset: integer) */
     get_user_bets_unconstrained: ((user: AztecAddressLike, start_offset: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** oracle_callback(answer: field, data: array) */
+    oracle_callback: ((answer: FieldLike, data: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** settle_bet(bet_id: field) */
+    settle_bet: ((bet_id: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
   };
 }

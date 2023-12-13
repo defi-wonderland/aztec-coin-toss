@@ -166,7 +166,7 @@ describe("E2E Coin Toss", () => {
       callback_data = [
         user.getAddress().toBigInt(),
         bet.randomness,
-        0n,
+        house.getAddress().toBigInt(),
         0n,
         0n,
       ];
