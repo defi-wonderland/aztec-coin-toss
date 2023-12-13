@@ -75,6 +75,7 @@ contract CoinToss {
         storage.config.initialize(&mut config_note, Option::none(), false);
     }
 
+    // House shares off-chain with the user the preimage for an escrow note for the bet_amount and an authwit to consume it
     #[aztec(private)]
     fn create_bet(bet: bool, userTransferNonce: Field, houseEscrowRandomness: Field, houseSettleEscrowNonce: Field) {
         let sender = AztecAddress::new(context.msg_sender());
