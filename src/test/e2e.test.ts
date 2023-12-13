@@ -14,6 +14,7 @@ import {
 } from "@aztec/aztec.js";
 
 import { CoinTossContract } from "../app/src/abis/cointoss/CoinToss.js";
+import { TokenContract } from "../token/Token.js";
 
 import { BetNote, ResultNote } from "../../types/Notes.js";
 import { initAztecJs } from "@aztec/aztec.js/init";
@@ -26,6 +27,7 @@ const BET_AMOUNT = 1337n;
 
 let pxe: PXE;
 let coinToss: CoinTossContract;
+let token: TokenContract;
 
 let user: AccountWalletWithPrivateKey;
 let house: AccountWalletWithPrivateKey;
@@ -56,6 +58,11 @@ describe("E2E Coin Toss", () => {
   beforeAll(async () => {
     USER_BET_NOTES = createUserBetNotes(4);
     FIRST_BET_NOTE = USER_BET_NOTES[0];
+
+    // Deploy the token
+    token = await TokenContract.deploy(deployer, requester.getAddress())
+    .send()
+    .deployed();
 
     // Deploy Coin Toss
     const coinTossReceipt = await CoinTossContract.deploy(

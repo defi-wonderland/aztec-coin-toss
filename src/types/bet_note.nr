@@ -21,23 +21,25 @@ struct BetNote {
     owner: AztecAddress,
     randomness: Field,
     bet: bool, // Heads is 0 (False). Tails is 1 (True).
+    escrow_randomness: Field,
     header: NoteHeader
 }
 
-global BET_NOTE_LEN: Field = 3;
+global BET_NOTE_LEN: Field = 4;
 
 impl BetNote {
-    pub fn new(_owner: AztecAddress, _bet: bool) -> Self {
+    pub fn new(_owner: AztecAddress, _bet: bool, _escrow_randomness: Field) -> Self {
         BetNote {
             owner: _owner,
             randomness: rand(),
             bet: _bet,
+            escrow_randomness: _escrow_randomness,
             header: NoteHeader::empty(),
         }
     }
 
     fn serialize(self) -> [Field; BET_NOTE_LEN] {
-        [self.owner.address, self.randomness, self.bet as Field]
+        [self.owner.address, self.randomness, self.bet as Field, self.escrow_randomness]
     }
 
     fn deserialize(preimage: [Field; BET_NOTE_LEN]) -> Self {
@@ -45,6 +47,7 @@ impl BetNote {
             owner: AztecAddress::new(preimage[0]),
             randomness: preimage[1],
             bet: preimage[2] as bool,
+            escrow_randomness: preimage[3],
             header: NoteHeader::empty(),
         }
     }
@@ -53,7 +56,8 @@ impl BetNote {
         dep::std::hash::pedersen_hash([
             self.owner.address,
             self.randomness,
-            self.bet as Field
+            self.bet as Field,
+            self.escrow_randomness,
         ])
     }
 

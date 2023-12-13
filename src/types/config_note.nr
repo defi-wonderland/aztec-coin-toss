@@ -14,25 +14,27 @@ struct ConfigNote {
     divinity: AztecAddress,
     private_oracle: AztecAddress,
     house: AztecAddress,
+    token: AztecAddress,
     bet_amount: Field,
     header: NoteHeader
 }
 
-global CONFIG_NOTE_LEN: Field = 4;
+global CONFIG_NOTE_LEN: Field = 5;
 
 impl ConfigNote {
-    pub fn new(_divinity: AztecAddress, _private_oracle: AztecAddress, _house: AztecAddress, _amount: Field) -> Self {
+    pub fn new(_divinity: AztecAddress, _private_oracle: AztecAddress, _house: AztecAddress, _token: AztecAddress, _amount: Field) -> Self {
         ConfigNote {
             divinity: _divinity,
             private_oracle: _private_oracle,
             house: _house,
+            token: _token,
             bet_amount: _amount,
             header: NoteHeader::empty(),
         }
     }
 
     fn serialize(self) -> [Field; CONFIG_NOTE_LEN] {
-        [self.divinity.address, self.private_oracle.address, self.house.address, self.bet_amount]
+        [self.divinity.address, self.private_oracle.address, self.house.address, self.token.address, self.bet_amount]
     }
 
     fn deserialize(preimage: [Field; CONFIG_NOTE_LEN]) -> Self {
@@ -40,6 +42,7 @@ impl ConfigNote {
             divinity: AztecAddress::new(preimage[0]),
             private_oracle: AztecAddress::new(preimage[1]),
             house: AztecAddress::new(preimage[2]),
+            token: AztecAddress::new(preimage[3]),
             bet_amount: preimage[3],
             header: NoteHeader::empty(),
         }
@@ -50,6 +53,7 @@ impl ConfigNote {
             self.divinity.address,
             self.private_oracle.address,
             self.house.address,
+            self.token.address,
             self.bet_amount
         ])
     }
