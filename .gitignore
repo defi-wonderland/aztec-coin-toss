@@ -4,6 +4,7 @@ yarn-error.log
 
 # build
 target/
+src/app/abis/cointoss/
 
 # MacOS frens:
 .DS_Store
