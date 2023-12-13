@@ -93,7 +93,7 @@ describe("E2E Coin Toss", () => {
     });
 
     it("User bet note should have the correct parameters", async () => {
-      const bet: BetNote = BetNote.fromChainData(
+      const bet: BetNote = new BetNote(
         (
           await coinToss
             .withWallet(user)
@@ -117,7 +117,7 @@ describe("E2E Coin Toss", () => {
     });
 
     it("House should have the copy of the same note as the user with correct parameters", async () => {
-      const bet: BetNote = BetNote.fromChainData(
+      const bet: BetNote = new BetNote(
         (
           await coinToss
             .withWallet(house)
@@ -154,7 +154,7 @@ describe("E2E Coin Toss", () => {
         .send()
         .wait();
 
-      const bet: BetNote = BetNote.fromChainData(
+      const bet: BetNote = new BetNote(
         (
           await coinToss
             .withWallet(user)
@@ -188,15 +188,15 @@ describe("E2E Coin Toss", () => {
         .methods.get_results_unconstrained(user.getAddress(), 0n)
         .view({ from: user.getAddress() });
 
-      const result_note = ResultNote.fromChainData(result_notes[0]._value);
+      const result_note = new ResultNote(result_notes[0]._value);
 
       expect(result_note).toEqual(
-        new ResultNote(
-          user.getAddress(),
-          mock_oracle.getAddress(),
-          callback_data[1],
-          true
-        )
+        new ResultNote({
+          owner: user.getAddress(),
+          sender: mock_oracle.getAddress(),
+          bet_id: callback_data[1],
+          result: true,
+        })
       );
     });
 
@@ -206,15 +206,15 @@ describe("E2E Coin Toss", () => {
         .methods.get_results_unconstrained(house.getAddress(), 0n)
         .view({ from: house.getAddress() });
 
-      const result_note = ResultNote.fromChainData(result_notes[0]._value);
+      const result_note = new ResultNote(result_notes[0]._value);
 
       expect(result_note).toEqual(
-        new ResultNote(
-          house.getAddress(),
-          mock_oracle.getAddress(),
-          callback_data[1],
-          true
-        )
+        new ResultNote({
+          owner: house.getAddress(),
+          sender: mock_oracle.getAddress(),
+          bet_id: callback_data[1],
+          result: true,
+        })
       );
     });
   });
@@ -237,7 +237,7 @@ describe("E2E Coin Toss", () => {
           .view({ from: user.getAddress() })
       )
         .filter((noteObj: any) => noteObj._is_some)
-        .map((betNote: any) => BetNote.fromChainData(betNote._value));
+        .map((betNote: any) => new BetNote(betNote._value));
 
       expect(bets).toEqual(
         expect.arrayContaining(
@@ -260,7 +260,7 @@ describe("E2E Coin Toss", () => {
           .view({ from: house.getAddress() })
       )
         .filter((noteObj: any) => noteObj._is_some)
-        .map((betNote: any) => BetNote.fromChainData(betNote._value));
+        .map((betNote: any) => new BetNote(betNote._value));
 
       expect(bets).toEqual(
         expect.arrayContaining(
@@ -312,7 +312,7 @@ function createUserBetNotes(number: number = 3): BetNote[] {
   let betNotes: BetNote[] = [];
 
   for (let i = 0; i < number; i++) {
-    betNote = BetNote.fromLocal({
+    betNote = new BetNote({
       owner: user.getAddress(),
       bet: !!(i % 2), // 0: Heads, 1: Tails
     });
