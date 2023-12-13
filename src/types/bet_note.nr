@@ -19,7 +19,7 @@ use dep::aztec::{
 
 struct BetNote {
     owner: AztecAddress,
-    randomness: Field,
+    bet_id: Field,
     bet: bool, // Heads is 0 (False). Tails is 1 (True).
     header: NoteHeader
 }
@@ -30,20 +30,20 @@ impl BetNote {
     pub fn new(_owner: AztecAddress, _bet: bool) -> Self {
         BetNote {
             owner: _owner,
-            randomness: rand(),
+            bet_id: rand(),
             bet: _bet,
             header: NoteHeader::empty(),
         }
     }
 
     fn serialize(self) -> [Field; BET_NOTE_LEN] {
-        [self.owner.address, self.randomness, self.bet as Field]
+        [self.owner.address, self.bet_id, self.bet as Field]
     }
 
     fn deserialize(preimage: [Field; BET_NOTE_LEN]) -> Self {
         BetNote {
             owner: AztecAddress::new(preimage[0]),
-            randomness: preimage[1],
+            bet_id: preimage[1],
             bet: preimage[2] as bool,
             header: NoteHeader::empty(),
         }
@@ -52,14 +52,14 @@ impl BetNote {
     fn compute_note_hash(self) -> Field {
         dep::std::hash::pedersen_hash([
             self.owner.address,
-            self.randomness,
+            self.bet_id,
             self.bet as Field
         ])
     }
 
     fn compute_nullifier(self) -> Field {
         let note_hash_for_nullify = compute_note_hash_for_read_or_nullify(BetNoteMethods, self);
-        let nullifier_key = self.randomness;
+        let nullifier_key = self.bet_id;
 
         dep::std::hash::pedersen_hash([
             note_hash_for_nullify,

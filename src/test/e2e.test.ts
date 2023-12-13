@@ -50,8 +50,8 @@ beforeAll(async () => {
 describe("E2E Coin Toss", () => {
   let USER_BET_NOTES: BetNote[];
   let FIRST_BET_NOTE: BetNote;
-  let userRandomness: bigint;
-  let houseRandomness: bigint;
+  let userBetId: bigint;
+  let houseBetId: bigint;
 
   beforeAll(async () => {
     USER_BET_NOTES = createUserBetNotes(4);
@@ -102,10 +102,10 @@ describe("E2E Coin Toss", () => {
         )[0]._value
       );
 
-      type BetNoteWithoutRandomness = Omit<BetNote, "randomness">;
+      type BetNoteWithoutBetId = Omit<BetNote, "bet_id">;
 
       // Check: Compare the note's data with the expected values
-      const betNote: BetNoteWithoutRandomness = {
+      const betNote: BetNoteWithoutBetId = {
         owner: FIRST_BET_NOTE.owner,
         bet: FIRST_BET_NOTE.bet,
       };
@@ -113,7 +113,7 @@ describe("E2E Coin Toss", () => {
       expect(bet).toEqual(expect.objectContaining(betNote));
 
       // Store the random nullifier, for later comparison
-      userRandomness = bet.randomness;
+      userBetId = bet.bet_id;
     });
 
     it("House should have the copy of the same note as the user with correct parameters", async () => {
@@ -126,9 +126,9 @@ describe("E2E Coin Toss", () => {
         )[0]._value
       );
 
-      type BetNoteWithoutRandomness = Omit<BetNote, "randomness">;
+      type BetNoteWithoutBetId = Omit<BetNote, "bet_id">;
 
-      const betNote: BetNoteWithoutRandomness = {
+      const betNote: BetNoteWithoutBetId = {
         owner: FIRST_BET_NOTE.owner,
         bet: FIRST_BET_NOTE.bet,
       };
@@ -136,11 +136,11 @@ describe("E2E Coin Toss", () => {
       expect(bet).toEqual(expect.objectContaining(betNote));
 
       // Store the random nullifier, for later comparison
-      houseRandomness = bet.randomness;
+      houseBetId = bet.bet_id;
     });
 
-    it("User and house should share the same randomness for notes, and therefore same nullifier key", async () => {
-      expect(userRandomness).toBe(houseRandomness);
+    it("User and house should share the same bet_id for notes, and therefore same nullifier key", async () => {
+      expect(userBetId).toBe(houseBetId);
     });
   });
 
@@ -165,7 +165,7 @@ describe("E2E Coin Toss", () => {
 
       callback_data = [
         user.getAddress().toBigInt(),
-        bet.randomness,
+        bet.bet_id,
         house.getAddress().toBigInt(),
         0n,
         0n,

@@ -83,13 +83,17 @@ contract CoinToss {
 
     #[aztec(private)]
     fn settle_bet(bet_id: Field) {
+        // let sender = AztecAddress::new(context.msg_sender());
+
+        // let bet_getter_option = NoteGetterOptions::new().select(0, question).select(1, from.address).set_limit(1);
+        // let question_note = storage.questions.get_notes(question_getter_option)[0];
         // Place holder, oracle auth MUST be checked here
         // assert(ResultNote.sender.address == config_note.private_oracle.address, "Unauthorized callback");
     }
 
     // Callback triggered on submit_answer in the oracle (add the result to both the user and the house).
     // data[0]: user address
-    // data[1]: bet "id" (the randomness generated when creating the bet note)
+    // data[1]: bet_id (the random id generated when creating the bet note)
     // data[2]: house address
     // data[2:5]: unused
     #[aztec(private)]
