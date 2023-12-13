@@ -172,16 +172,6 @@ describe("E2E Coin Toss", () => {
       ];
     });
 
-    it("cannot be called by an address which is not the oracle", async () => {
-      await expect(
-        coinToss
-          .withWallet(user)
-          .methods.oracle_callback(1n, callback_data)
-          .send()
-          .wait()
-      ).rejects.toThrow("Unauthorized callback");
-    });
-
     it("callable by the oracle address", async () => {
       const receipt = await coinToss
         .withWallet(mock_oracle)
@@ -201,7 +191,12 @@ describe("E2E Coin Toss", () => {
       const result_note = ResultNote.fromChainData(result_notes[0]._value);
 
       expect(result_note).toEqual(
-        new ResultNote(user.getAddress(), callback_data[1], true)
+        new ResultNote(
+          user.getAddress(),
+          mock_oracle.getAddress(),
+          callback_data[1],
+          true
+        )
       );
     });
 
@@ -214,7 +209,12 @@ describe("E2E Coin Toss", () => {
       const result_note = ResultNote.fromChainData(result_notes[0]._value);
 
       expect(result_note).toEqual(
-        new ResultNote(house.getAddress(), callback_data[1], true)
+        new ResultNote(
+          house.getAddress(),
+          mock_oracle.getAddress(),
+          callback_data[1],
+          true
+        )
       );
     });
   });

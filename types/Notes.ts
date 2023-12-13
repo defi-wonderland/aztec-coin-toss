@@ -30,11 +30,18 @@ export class BetNote {
 
 export class ResultNote {
   owner: AztecAddress;
+  sender: AztecAddress;
   bet_id: bigint;
   result: boolean;
 
-  constructor(owner: AztecAddress, bet_id: bigint, result: boolean) {
+  constructor(
+    owner: AztecAddress,
+    sender: AztecAddress,
+    bet_id: bigint,
+    result: boolean
+  ) {
     this.owner = owner;
+    this.sender = sender;
     this.bet_id = bet_id;
     this.result = result;
   }
@@ -42,6 +49,7 @@ export class ResultNote {
   static fromChainData(note: any) {
     return new ResultNote(
       AztecAddress.fromBigInt(note.owner.address),
+      AztecAddress.fromBigInt(note.sender.address),
       note.bet_id,
       note.result
     );
@@ -50,6 +58,7 @@ export class ResultNote {
   static fromLocal(note: any) {
     return new ResultNote(
       AztecAddress.fromBigInt(note.owner.asBigInt),
+      AztecAddress.fromBigInt(note.sender.asBigInt),
       note.bet_id,
       note.result
     );

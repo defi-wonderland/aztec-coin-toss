@@ -81,6 +81,12 @@ contract CoinToss {
         );
     }
 
+    #[aztec(private)]
+    fn settle_bet(bet_id: Field) {
+        // Place holder, oracle auth MUST be checked here
+        // assert(ResultNote.sender.address == config_note.private_oracle.address, "Unauthorized callback");
+    }
+
     // Callback triggered on submit_answer in the oracle (add the result to both the user and the house).
     // data[0]: user address
     // data[1]: bet "id" (the randomness generated when creating the bet note)
@@ -90,10 +96,8 @@ contract CoinToss {
         let config_note = storage.config.get_note();
         let sender = AztecAddress::new(context.msg_sender());
 
-        assert(sender.address == config_note.private_oracle.address, "Unauthorized callback");
-
-        let mut result_note_user = ResultNote::new(AztecAddress::new(data[0]), data[1], answer as bool);
-        let mut result_note_house = ResultNote::new(config_note.house, data[1], answer as bool);
+        let mut result_note_user = ResultNote::new(AztecAddress::new(data[0]), sender, data[1], answer as bool);
+        let mut result_note_house = ResultNote::new(config_note.house, sender, data[1], answer as bool);
 
         storage.result.insert(&mut result_note_user, true);
         storage.result.insert(&mut result_note_house, true);

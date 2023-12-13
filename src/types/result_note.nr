@@ -19,17 +19,19 @@ use dep::aztec::{
 
 struct ResultNote {
     owner: AztecAddress,
+    sender: AztecAddress,
     bet_id: Field,
     result: bool, // Heads is 0 (False). Tails is 1 (True).
     header: NoteHeader
 }
 
-global RESULT_NOTE_LEN: Field = 3;
+global RESULT_NOTE_LEN: Field = 4;
 
 impl ResultNote {
-    pub fn new(_owner: AztecAddress, _bet_id: Field, _result: bool) -> Self {
+    pub fn new(_owner: AztecAddress, _sender: AztecAddress, _bet_id: Field, _result: bool) -> Self {
         ResultNote {
             owner: _owner,
+            sender: _sender,
             bet_id: _bet_id,
             result: _result,
             header: NoteHeader::empty(),
@@ -37,14 +39,15 @@ impl ResultNote {
     }
 
     fn serialize(self) -> [Field; RESULT_NOTE_LEN] {
-        [self.owner.address, self.bet_id, self.result as Field]
+        [self.owner.address, self.sender.address, self.bet_id, self.result as Field]
     }
 
     fn deserialize(preimage: [Field; RESULT_NOTE_LEN]) -> Self {
         ResultNote {
             owner: AztecAddress::new(preimage[0]),
-            bet_id: preimage[1],
-            result: preimage[2] as bool,
+            sender: AztecAddress::new(preimage[1]),
+            bet_id: preimage[2],
+            result: preimage[3] as bool,
             header: NoteHeader::empty(),
         }
     }
@@ -52,6 +55,7 @@ impl ResultNote {
     fn compute_note_hash(self) -> Field {
         dep::std::hash::pedersen_hash([
             self.owner.address,
+            self.sender.address,
             self.bet_id,
             self.result as Field
         ])
