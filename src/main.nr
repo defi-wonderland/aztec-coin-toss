@@ -4,7 +4,8 @@ contract CoinToss {
     use dep::aztec::context::Context;
     use crate::types::bet_note::{BetNote, BetNoteMethods, BET_NOTE_LEN};
     use crate::types::config_note::{ConfigNote, ConfigNoteMethods, CONFIG_NOTE_LEN};
-
+    use crate::types::result_note::{ResultNote, ResultNoteMethods, RESULT_NOTE_LEN};
+ 
     use dep::aztec::note::{
         note_getter_options::NoteGetterOptions,
         note_header::NoteHeader,
@@ -32,11 +33,13 @@ contract CoinToss {
 
     global CONFIG_NOTE_SLOT = 1;
     global BETS_SLOT = 2;
+    global RESULT_SLOT = 3;
 
     // TODO: add slow update tree to make the switch from private to public
     struct Storage {
         config: ImmutableSingleton<ConfigNote, CONFIG_NOTE_LEN>,
         bets: Set<BetNote, BET_NOTE_LEN>,
+        result: Set<ResultNote, RESULT_NOTE_LEN>
     }
 
     impl Storage {
@@ -47,7 +50,8 @@ contract CoinToss {
                     CONFIG_NOTE_SLOT,
                     ConfigNoteMethods,
                 ),
-                bets: Set::new(context, BETS_SLOT, BetNoteMethods)
+                bets: Set::new(context, BETS_SLOT, BetNoteMethods),
+                result: Set::new(context, RESULT_SLOT, ResultNoteMethods)
             }
         }
     }
@@ -77,6 +81,28 @@ contract CoinToss {
         );
     }
 
+    #[aztec(private)]
+    fn settle_bet(bet_id: Field) {
+        // Place holder, oracle auth MUST be checked here
+        // assert(ResultNote.sender.address == config_note.private_oracle.address, "Unauthorized callback");
+    }
+
+    // Callback triggered on submit_answer in the oracle (add the result to both the user and the house).
+    // data[0]: user address
+    // data[1]: bet "id" (the randomness generated when creating the bet note)
+    // data[2]: house address
+    // data[2:5]: unused
+    #[aztec(private)]
+    fn oracle_callback(answer: Field, data: [Field; 5]) {
+        let sender = AztecAddress::new(context.msg_sender());
+
+        let mut result_note_user = ResultNote::new(AztecAddress::new(data[0]), sender, data[1], answer as bool);
+        let mut result_note_house = ResultNote::new(AztecAddress::new(data[2]), sender, data[1], answer as bool);
+
+        storage.result.insert(&mut result_note_user, true);
+        storage.result.insert(&mut result_note_house, true);
+    }
+
     // Returns the divinity address
     unconstrained fn get_config_unconstrained() -> ConfigNote {
         storage.config.view_note()
@@ -87,12 +113,19 @@ contract CoinToss {
         storage.bets.view_notes(user_bets_getter_option)
     }
 
+    unconstrained fn get_results_unconstrained(owner: AztecAddress, start_offset: u32) -> [Option<ResultNote>; 10] {
+        let results_getter_option = NoteViewerOptions::new().select(0, owner.address).set_offset(start_offset);
+        storage.result.view_notes(results_getter_option)
+    }
+
     // Computes note hash and nullifier.
     unconstrained fn compute_note_hash_and_nullifier(contract_address: Field, nonce: Field, storage_slot: Field, preimage: [Field; CONFIG_NOTE_LEN]) -> [Field; 4] {
         let note_header = NoteHeader::new(contract_address, nonce, storage_slot);
 
         if(storage_slot == BETS_SLOT) {
             note_utils::compute_note_hash_and_nullifier(BetNoteMethods, note_header, preimage)
+        } else if(storage_slot == RESULT_SLOT) {
+            note_utils::compute_note_hash_and_nullifier(ResultNoteMethods, note_header, preimage)
         } else {
             note_utils::compute_note_hash_and_nullifier(ConfigNoteMethods, note_header, preimage)
         }
