@@ -43,7 +43,7 @@ impl ConfigNote {
             private_oracle: AztecAddress::new(preimage[1]),
             house: AztecAddress::new(preimage[2]),
             token: AztecAddress::new(preimage[3]),
-            bet_amount: preimage[3],
+            bet_amount: preimage[4],
             header: NoteHeader::empty(),
         }
     }

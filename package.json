@@ -1,12 +1,11 @@
 {
-  "name": "private-oracle",
+  "name": "coin-toss",
   "version": "0.0.0",
   "license": "MIT",
   "type": "module",
   "scripts": {
     "compile": "aztec-cli compile . -o './src/app/src/abis/cointoss' -i './src/app/src/abis/cointoss' -ts './src/app/src/abis/cointoss'",
-    "test": "yarn compile && NODE_NO_WARNINGS=1 node --experimental-vm-modules $(yarn bin jest) --runInBand --passWithNoTests --testTimeout=15000",
-    "start:dev": "yarn --cwd ./src/app start:dev"
+    "test": "yarn compile && NODE_NO_WARNINGS=1 node --experimental-vm-modules $(yarn bin jest) --runInBand --passWithNoTests --testTimeout=15000"
   },
   "jest": {
     "preset": "ts-jest/presets/default-esm",
@@ -25,9 +24,9 @@
     "rootDir": "./src"
   },
   "dependencies": {
-    "@aztec/aztec.js": "0.16.7",
-    "@aztec/foundation": "0.16.7",
-    "@aztec/types": "0.16.7",
+    "@aztec/aztec.js": "0.16.9",
+    "@aztec/foundation": "0.16.9",
+    "@aztec/types": "0.16.9",
     "@types/jest": "^29.5.5",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.1",

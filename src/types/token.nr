@@ -4,11 +4,7 @@ use dep::std;
 use dep::aztec::context::{ PrivateContext, PublicContext };
 use dep::protocol_types::constants::RETURN_VALUES_LENGTH;
 
-struct AccountBroadcastEscrowNoteForStruct {
-  address: Field,
-}
-
-struct OwnerBroadcastEscrowNoteForStruct {
+struct AccountsBroadcastEscrowNoteForStruct {
   address: Field,
 }
 
@@ -92,18 +88,17 @@ impl TokenPrivateContextInterface {
   pub fn broadcast_escrow_note_for(
     self,
     context: &mut PrivateContext,
-    account: AccountBroadcastEscrowNoteForStruct,
-    owner: OwnerBroadcastEscrowNoteForStruct,
-    amount: Field,
+    accounts: [AccountsBroadcastEscrowNoteForStruct;4],
     randomness: Field
   ) -> [Field; RETURN_VALUES_LENGTH] {
-    let mut serialized_args = [0; 4];
-    serialized_args[0] = account.address;
-    serialized_args[1] = owner.address;
-    serialized_args[2] = amount;
-    serialized_args[3] = randomness;
+    let mut serialized_args = [0; 5];
+    serialized_args[0] = accounts[0].address;
+    serialized_args[1] = accounts[1].address;
+    serialized_args[2] = accounts[2].address;
+    serialized_args[3] = accounts[3].address;
+    serialized_args[4] = randomness;
 
-    context.call_private_function(self.address, 0x46b53be6, serialized_args)
+    context.call_private_function(self.address, 0x2426c148, serialized_args)
   }
   
 
@@ -216,18 +211,16 @@ impl TokenPrivateContextInterface {
     context: &mut PrivateContext,
     owner: OwnerSettleEscrowStruct,
     recipient: RecipientSettleEscrowStruct,
-    amount: Field,
     randomness: Field,
     nonce: Field
   ) -> [Field; RETURN_VALUES_LENGTH] {
-    let mut serialized_args = [0; 5];
+    let mut serialized_args = [0; 4];
     serialized_args[0] = owner.address;
     serialized_args[1] = recipient.address;
-    serialized_args[2] = amount;
-    serialized_args[3] = randomness;
-    serialized_args[4] = nonce;
+    serialized_args[2] = randomness;
+    serialized_args[3] = nonce;
 
-    context.call_private_function(self.address, 0x9cde20b1, serialized_args)
+    context.call_private_function(self.address, 0x510f50d4, serialized_args)
   }
   
 

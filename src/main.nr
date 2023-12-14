@@ -8,14 +8,13 @@ contract CoinToss {
  
     use crate::types::token::{
         TokenPrivateContextInterface, 
-        FromTransferPublicStruct, 
-        ToTransferPublicStruct, 
+        FromTransferStruct, 
+        ToTransferStruct, 
         FromEscrowStruct,
         OwnerEscrowStruct,
         RecipientSettleEscrowStruct,
         OwnerSettleEscrowStruct,
-        AccountBroadcastEscrowNoteForStruct,
-        OwnerBroadcastEscrowNoteForStruct
+        AccountsBroadcastEscrowNoteForStruct
     };
 
     use dep::aztec::note::{
@@ -83,15 +82,15 @@ contract CoinToss {
         let house = config_note.house;
         let token = config_note.token;
         let bet_amount = config_note.bet_amount;
-        let address_this = AztecAddress::new(context.this_address()).address;
+        let address_this = AztecAddress::new(context.this_address());
 
-        let token_contract = TokenPrivateContextInterface.at(token.address);
+        let token_contract = TokenPrivateContextInterface::at(token.address);
 
         // We transfer private tokens from the user to the coin toss 
         let _ = token_contract.transfer(
             &mut context,
-            FromTransferPublicStruct { address: sender.address },
-            ToTransferPublicStruct { address: address_this.address },
+            FromTransferStruct { address: sender.address },
+            ToTransferStruct { address: address_this.address },
             bet_amount,
             userTransferNonce
         );
@@ -131,7 +130,7 @@ contract CoinToss {
 
         emit_encrypted_log(
             &mut context,
-            address_this,
+            address_this.address,
             BETS_SLOT,
             get_public_key(house.address),
             user_bet.serialize(),
@@ -161,7 +160,7 @@ contract CoinToss {
         let config_note = storage.config.get_note();
         let house = config_note.house;
         let token = config_note.token;
-        let address_this = AztecAddress::new(context.this_address()).address;
+        let address_this = AztecAddress::new(context.this_address());
         let bets = storage.bets;
 
         let options = NoteGetterOptions::new().select(3, bet_id).set_limit(1);
@@ -176,7 +175,7 @@ contract CoinToss {
             // Nullify the bet note
             bets.remove(note);
 
-            let _ = TokenPrivateContextInterface.at(token.address).settle_escrow(
+            let _ = TokenPrivateContextInterface::at(token.address).settle_escrow(
                 &mut context,
                 OwnerSettleEscrowStruct { address: address_this.address },
                 RecipientSettleEscrowStruct { address: receiver.address }, 
@@ -202,7 +201,7 @@ contract CoinToss {
     }
 
     // Computes note hash and nullifier.
-    unconstrained fn compute_note_hash_and_nullifier(contract_address: Field, nonce: Field, storage_slot: Field, preimage: [Field; CONFIG_NOTE_LEN]) -> [Field; CONFIG_NOTE_LEN] {
+    unconstrained fn compute_note_hash_and_nullifier(contract_address: Field, nonce: Field, storage_slot: Field, preimage: [Field; CONFIG_NOTE_LEN]) -> [Field; 4] {
         let note_header = NoteHeader::new(contract_address, nonce, storage_slot);
 
         if(storage_slot == BETS_SLOT) {
