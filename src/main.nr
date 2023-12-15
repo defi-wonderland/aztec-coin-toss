@@ -182,6 +182,7 @@ contract CoinToss {
 
             let result = result_note.unwrap_unchecked().result;
 
+            // Send the bet amount to the winner
             let receiver = if(result == note.bet) { note.owner } else { house };
 
             // Nullify the bet note

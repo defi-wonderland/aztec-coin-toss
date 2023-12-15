@@ -192,7 +192,7 @@ describe("E2E Coin Toss", () => {
           .methods.get_escrows(0)
           .view({ from: user.getAddress() })
       ).find(
-        (noteObj: any) => noteObj._value.bet_id == userEscrowRandomness
+        (noteObj: any) => noteObj._value.randomness == userEscrowRandomness
       )._value;
 
       expect(escrowNote.amount.value).toBe(BET_AMOUNT * 2n);
