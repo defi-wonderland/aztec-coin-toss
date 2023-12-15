@@ -1,27 +1,26 @@
 import {
+  AccountWalletWithPrivateKey,
+  AztecAddress,
+  BatchCall,
+  ContractFunctionInteraction,
+  ExtendedNote,
   Fr,
+  Note,
   PXE,
+  TxHash,
+  computeAuthWitMessageHash,
+  computeMessageSecretHash,
   createAccount,
   createPXEClient,
   getSandboxAccountsWallets,
   waitForSandbox,
-  AztecAddress,
-  AccountWalletWithPrivateKey,
-  TxHash,
-  ExtendedNote,
-  Note,
-  BatchCall,
-  computeMessageSecretHash,
-  computeAuthWitMessageHash,
-  ContractFunctionInteraction,
 } from "@aztec/aztec.js";
 
 import { CoinTossContract } from "../artifacts/CoinToss.js";
-import { TokenContract } from "../token/Token.js";
+import { TokenContract } from "../artifacts/token/Token.js";
 
-import { BetNote, ResultNote } from "./Notes.js";
 import { initAztecJs } from "@aztec/aztec.js/init";
-import { fields } from "node_modules/@aztec/foundation/dest/index.js";
+import { BetNote, ResultNote } from "./Notes.js";
 
 const CONFIG_SLOT: Fr = new Fr(1);
 const BETS_SLOT: Fr = new Fr(2);
@@ -258,9 +257,17 @@ describe("E2E Coin Toss", () => {
     let callback_data: bigint[];
 
     beforeAll(async () => {
+      // House creates the escrow and shares with the user
+      const {randomness: escrowRandomness, authNonce: settleEscrowNonce} = (await getHouseEscrowAndAuthNonce())[0];
+      
+      // Approve the transfer of tokens from user
+      const transferNonce = Fr.random();
+      const transferAction = token.methods.transfer(user.getAddress(), coinToss.address, BET_AMOUNT, transferNonce);
+      await createAuth(transferAction, user, coinToss.address);
+
       await coinToss
         .withWallet(user)
-        .methods.create_bet(FIRST_BET_NOTE.bet)
+        .methods.create_bet(FIRST_BET_NOTE.bet, transferNonce, escrowRandomness, settleEscrowNonce)
         .send()
         .wait();
 

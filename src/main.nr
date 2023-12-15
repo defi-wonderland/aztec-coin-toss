@@ -153,6 +153,7 @@ contract CoinToss {
         storage.result.insert(&mut result_note_house, true);
     }
 
+    #[aztec(private)]
     fn settle_bet(bet_id: Field) {
         // Place holder, oracle auth MUST be checked here
         // assert(ResultNote.sender.address == config_note.private_oracle.address, "Unauthorized callback");
