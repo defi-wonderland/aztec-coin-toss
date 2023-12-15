@@ -163,7 +163,7 @@ contract CoinToss {
         let address_this = AztecAddress::new(context.this_address());
         let bets = storage.bets;
 
-        let options = NoteGetterOptions::new().select(3, bet_id).set_limit(1);
+        let options = NoteGetterOptions::new().select(1, bet_id).set_limit(1);
         let notes = bets.get_notes(options);
         
         if(notes[0].is_some()) {
@@ -182,6 +182,8 @@ contract CoinToss {
                 note.escrow_randomness,
                 0
             );
+        } else {
+            assert(false, "Bet not found");
         }
     }
 
