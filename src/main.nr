@@ -50,7 +50,7 @@ contract CoinToss {
     struct Storage {
         config: ImmutableSingleton<ConfigNote, CONFIG_NOTE_LEN>,
         bets: Set<BetNote, BET_NOTE_LEN>,
-        result: Set<ResultNote, RESULT_NOTE_LEN>
+        results: Set<ResultNote, RESULT_NOTE_LEN>
     }
 
     impl Storage {
@@ -62,7 +62,7 @@ contract CoinToss {
                     ConfigNoteMethods,
                 ),
                 bets: Set::new(context, BETS_SLOT, BetNoteMethods),
-                result: Set::new(context, RESULT_SLOT, ResultNoteMethods)
+                results: Set::new(context, RESULT_SLOT, ResultNoteMethods)
             }
         }
     }
@@ -139,7 +139,7 @@ contract CoinToss {
 
     // Callback triggered on submit_answer in the oracle (add the result to both the user and the house).
     // data[0]: user address
-    // data[1]: bet "id" (the randomness generated when creating the bet note)
+    // data[1]: bet_id (the randomness generated when creating the bet note)
     // data[2]: house address
     // data[2:5]: unused
     #[aztec(private)]
@@ -149,8 +149,8 @@ contract CoinToss {
         let mut result_note_user = ResultNote::new(AztecAddress::new(data[0]), sender, data[1], answer as bool);
         let mut result_note_house = ResultNote::new(AztecAddress::new(data[2]), sender, data[1], answer as bool);
 
-        storage.result.insert(&mut result_note_user, true);
-        storage.result.insert(&mut result_note_house, true);
+        storage.results.insert(&mut result_note_user, true);
+        storage.results.insert(&mut result_note_house, true);
     }
 
     #[aztec(private)]
@@ -159,19 +159,30 @@ contract CoinToss {
         // assert(ResultNote.sender.address == config_note.private_oracle.address, "Unauthorized callback");
 
         let config_note = storage.config.get_note();
+
         let house = config_note.house;
         let token = config_note.token;
+        let oracle = config_note.private_oracle;
+        
         let address_this = AztecAddress::new(context.this_address());
+        
         let bets = storage.bets;
 
         let options = NoteGetterOptions::new().select(1, bet_id).set_limit(1);
-        let notes = bets.get_notes(options);
+        let bet_notes = bets.get_notes(options);
         
-        if(notes[0].is_some()) {
-            let note = notes[0].unwrap_unchecked();
+        if(bet_notes[0].is_some()) {
+            let note = bet_notes[0].unwrap_unchecked();
 
-            // TODO: Change receiver depending on the winner
-            let receiver = house;
+            // Filter by bet_id and result sender (which must be the oracle)
+            let result_getter_option = NoteGetterOptions::new().select(3, bet_id).select(1, oracle.address).set_limit(1);
+            let result_note = storage.results.get_notes(result_getter_option)[0];
+
+            assert(result_note.is_some(), "Invalid bet result (not settled yet or wrong oracle)");
+
+            let result = result_note.unwrap_unchecked().result;
+
+            let receiver = if(result == note.bet) { note.owner } else { house };
 
             // Nullify the bet note
             bets.remove(note);
@@ -200,7 +211,7 @@ contract CoinToss {
 
     unconstrained fn get_results_unconstrained(owner: AztecAddress, start_offset: u32) -> [Option<ResultNote>; 10] {
         let results_getter_option = NoteViewerOptions::new().select(0, owner.address).set_offset(start_offset);
-        storage.result.view_notes(results_getter_option)
+        storage.results.view_notes(results_getter_option)
     }
 
     // Computes note hash and nullifier.
