@@ -209,8 +209,63 @@ describe("E2E Coin Toss", () => {
     })
   });
 
-  describe("settle_bet()", () => {
+  describe.only("settle_bet()", () => {
     let houseBalance: bigint;
+    let betId: bigint;
+
+    // Create a bet and trigger the oracle callback with the result
+    beforeAll(async () => {
+      // House creates the escrow and shares with the user
+      const { randomness: escrowRandomness, authNonce: settleEscrowNonce } = (
+        await getHouseEscrowAndAuthNonce()
+      )[0];
+
+      // Approve the transfer of tokens from user
+      const transferNonce = Fr.random();
+      const transferAction = token.methods.transfer(
+        user.getAddress(),
+        coinToss.address,
+        BET_AMOUNT,
+        transferNonce
+      );
+      await createAuth(transferAction, user, coinToss.address);
+
+      const receipt = await coinToss
+        .withWallet(user)
+        .methods.create_bet(
+          FIRST_BET_NOTE.bet,
+          transferNonce,
+          escrowRandomness,
+          settleEscrowNonce
+        )
+        .send()
+        .wait();
+
+      const bet: BetNote = new BetNote(
+        (
+          await coinToss
+            .withWallet(user)
+            .methods.get_user_bets_unconstrained(user.getAddress(), 0n)
+            .view({ from: user.getAddress() })
+        )[0]._value
+      );
+
+      betId = bet.bet_id;
+
+      const callback_data = [
+        user.getAddress().toBigInt(),
+        bet.bet_id,
+        house.getAddress().toBigInt(),
+        0n,
+        0n,
+      ];
+
+      await coinToss
+        .withWallet(mock_oracle)
+        .methods.oracle_callback(1n, callback_data)
+        .send()
+        .wait();
+    });
 
     it("Tx to settle_bet is mined", async () => {
       // Save the private balance of the house
@@ -221,7 +276,7 @@ describe("E2E Coin Toss", () => {
 
       const receipt = await coinToss
         .withWallet(user)
-        .methods.settle_bet(userRandomness)
+        .methods.settle_bet(betId)
         .send()
         .wait();
 
