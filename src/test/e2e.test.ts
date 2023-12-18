@@ -230,7 +230,7 @@ describe("E2E Coin Toss", () => {
       );
       await createAuth(transferAction, user, coinToss.address);
 
-      const receipt = await coinToss
+      await coinToss
         .withWallet(user)
         .methods.create_bet(
           FIRST_BET_NOTE.bet,

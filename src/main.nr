@@ -172,7 +172,7 @@ contract CoinToss {
             let note = bet_notes[0].unwrap_unchecked();
 
             // Filter by bet_id and result sender (which must be the oracle)
-            let result_getter_option = NoteGetterOptions::new().select(3, bet_id).select(1, oracle.address).set_limit(1);
+            let result_getter_option = NoteGetterOptions::new().select(3, bet_id).select(2, oracle.address).set_limit(1);
             let result_note = storage.results.get_notes(result_getter_option)[0];
 
             assert(result_note.is_some(), "Invalid bet result (not settled yet or wrong oracle)");
