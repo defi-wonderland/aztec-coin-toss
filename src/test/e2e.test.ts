@@ -251,6 +251,7 @@ describe("E2E Coin Toss", () => {
       );
 
       betId = bet.bet_id;
+      console.log("betId", betId);
 
       const callback_data = [
         user.getAddress().toBigInt(),
