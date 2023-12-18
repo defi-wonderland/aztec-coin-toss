@@ -118,7 +118,7 @@ contract CoinToss {
             &mut context,
             [
                 AccountsBroadcastEscrowNoteForStruct { address: sender.address },
-                AccountsBroadcastEscrowNoteForStruct { address: house.address },
+                AccountsBroadcastEscrowNoteForStruct { address: house.address }, 
                 AccountsBroadcastEscrowNoteForStruct { address: 0 },
                 AccountsBroadcastEscrowNoteForStruct { address: 0 }
             ],
@@ -182,9 +182,6 @@ contract CoinToss {
             // Send the bet amount to the winner
             let receiver = if(result == note.bet) { note.owner } else { house };
 
-            // Nullify the bet note
-            bets.remove(note);
-
             let _ = TokenPrivateContextInterface::at(token.address).settle_escrow(
                 &mut context,
                 OwnerSettleEscrowStruct { address: address_this.address },
@@ -192,6 +189,9 @@ contract CoinToss {
                 note.escrow_randomness,
                 0
             );
+
+            // Nullify the bet note
+            bets.remove(note);
         } else {
             assert(false, "Bet not found");
         }
