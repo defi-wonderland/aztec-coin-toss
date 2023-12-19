@@ -2,9 +2,13 @@
   
 use dep::std;
 use dep::aztec::context::{ PrivateContext, PublicContext };
-use dep::aztec::constants_gen::RETURN_VALUES_LENGTH;
+use dep::protocol_types::constants::RETURN_VALUES_LENGTH;
 
 struct RequesterSubmitAnswerStruct {
+  address: Field,
+}
+
+struct FromSubmitQuestionStruct {
   address: Field,
 }
 
@@ -49,6 +53,26 @@ impl PrivateOraclePrivateContextInterface {
   }
   
 
+  pub fn get_fee_note(
+    self,
+    context: &mut PrivateContext
+  ) -> [Field; RETURN_VALUES_LENGTH] {
+    let mut serialized_args = [0; 0];
+
+    context.call_private_function(self.address, 0x95f22a18, serialized_args)
+  }
+  
+
+  pub fn get_payment_token_note(
+    self,
+    context: &mut PrivateContext
+  ) -> [Field; RETURN_VALUES_LENGTH] {
+    let mut serialized_args = [0; 0];
+
+    context.call_private_function(self.address, 0xa8497ead, serialized_args)
+  }
+  
+
   pub fn initialize_payment_token(
     self,
     context: &mut PrivateContext,
@@ -82,16 +106,25 @@ impl PrivateOraclePrivateContextInterface {
   pub fn submit_question(
     self,
     context: &mut PrivateContext,
+    from: FromSubmitQuestionStruct,
     question: Field,
     divinity_address: DivinityAddressSubmitQuestionStruct,
-    nonce: Field
+    nonce: Field,
+    callback: [Field;6]
   ) -> [Field; RETURN_VALUES_LENGTH] {
-    let mut serialized_args = [0; 3];
-    serialized_args[0] = question;
-    serialized_args[1] = divinity_address.address;
-    serialized_args[2] = nonce;
+    let mut serialized_args = [0; 10];
+    serialized_args[0] = from.address;
+    serialized_args[1] = question;
+    serialized_args[2] = divinity_address.address;
+    serialized_args[3] = nonce;
+    serialized_args[4] = callback[0];
+    serialized_args[5] = callback[1];
+    serialized_args[6] = callback[2];
+    serialized_args[7] = callback[3];
+    serialized_args[8] = callback[4];
+    serialized_args[9] = callback[5];
 
-    context.call_private_function(self.address, 0xd96c367e, serialized_args)
+    context.call_private_function(self.address, 0xb9d88bb1, serialized_args)
   }
   
 }

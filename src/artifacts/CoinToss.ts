@@ -82,8 +82,8 @@ export class CoinTossContract extends ContractBase {
     /** compute_note_hash_and_nullifier(contract_address: field, nonce: field, storage_slot: field, preimage: array) */
     compute_note_hash_and_nullifier: ((contract_address: FieldLike, nonce: FieldLike, storage_slot: FieldLike, preimage: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** create_bet(bet: boolean, userTransferNonce: field, houseEscrowRandomness: field, houseSettleEscrowNonce: field) */
-    create_bet: ((bet: boolean, userTransferNonce: FieldLike, houseEscrowRandomness: FieldLike, houseSettleEscrowNonce: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** create_bet(bet: boolean, userTransferNonce: field, houseEscrowRandomness: field, houseSettleEscrowNonce: field, user_question: field) */
+    create_bet: ((bet: boolean, userTransferNonce: FieldLike, houseEscrowRandomness: FieldLike, houseSettleEscrowNonce: FieldLike, user_question: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** get_config_unconstrained() */
     get_config_unconstrained: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;

@@ -18,6 +18,7 @@ import {
 
 import { CoinTossContract } from "../artifacts/CoinToss.js";
 import { TokenContract } from "../artifacts/token/Token.js";
+import { PrivateOracleContract } from "../artifacts/oracle/PrivateOracle.js";
 
 import { initAztecJs } from "@aztec/aztec.js/init";
 import { BetNote, ResultNote } from "./Notes.js";
@@ -26,14 +27,18 @@ const CONFIG_SLOT: Fr = new Fr(1);
 const BETS_SLOT: Fr = new Fr(2);
 const RESULT_SLOT: Fr = new Fr(3);
 
+const ORACLE_FEE_SLOT = 2 
+
 const MINT_TOKENS = 100000n;
 
 const PRIVATE_ORACLE_ADDRESS = AztecAddress.fromBigInt(456n);
 const BET_AMOUNT = 1337n;
+const ORACLE_FEE = 100n;
 
 let pxe: PXE;
 let coinToss: CoinTossContract;
 let token: TokenContract;
+let oracle: PrivateOracleContract;
 
 let user: AccountWalletWithPrivateKey;
 let house: AccountWalletWithPrivateKey;
@@ -73,6 +78,12 @@ describe("E2E Coin Toss", () => {
       .send()
       .deployed();
 
+    const oracleReceipt = await PrivateOracleContract.deploy(deployer, token.address, ORACLE_FEE)
+      .send()
+      .wait();
+
+    oracle = oracleReceipt.contract;
+
     // Mint the tokens
     await mintTokenFor(house, house, MINT_TOKENS);
     await mintTokenFor(user, house, MINT_TOKENS);
@@ -81,10 +92,10 @@ describe("E2E Coin Toss", () => {
     const coinTossReceipt = await CoinTossContract.deploy(
       deployer,
       divinity.getAddress(),
-      mock_oracle.getAddress(),
+      oracle.address,
       house.getAddress(),
       token.address,
-      BET_AMOUNT
+      BET_AMOUNT + ORACLE_FEE
     )
       .send()
       .wait();
@@ -93,6 +104,19 @@ describe("E2E Coin Toss", () => {
 
     // Add the contract public key to the PXE
     await pxe.registerRecipient(coinToss.completeAddress);
+
+    // Add the oracle fee note to the PXE
+    await pxe.addNote(
+      new ExtendedNote(
+        new Note([
+          new Fr(ORACLE_FEE),
+        ]),
+        user.getAddress(),
+        oracle.address,
+        new Fr(ORACLE_FEE_SLOT),
+        oracleReceipt.txHash
+      )
+    );
 
     // Add all address notes to pxe
     await addConfigNotesToPxe(
@@ -115,12 +139,14 @@ describe("E2E Coin Toss", () => {
 
       // Approve the transfer of tokens from user
       const transferNonce = Fr.random();
+      const userRandomness = Fr.random();
       const transferAction = token.methods.transfer(
         user.getAddress(),
         coinToss.address,
         BET_AMOUNT,
         transferNonce
       );
+
       await createAuth(transferAction, user, coinToss.address);
 
       const receipt = await coinToss
@@ -129,7 +155,8 @@ describe("E2E Coin Toss", () => {
           FIRST_BET_NOTE.bet,
           transferNonce,
           escrowRandomness,
-          settleEscrowNonce
+          settleEscrowNonce,
+          userRandomness
         )
         .send()
         .wait();
@@ -232,6 +259,7 @@ describe("E2E Coin Toss", () => {
 
       // Approve the transfer of tokens from user
       const transferNonce = Fr.random();
+      const userRandomness = Fr.random();
       const transferAction = token.methods.transfer(
         user.getAddress(),
         coinToss.address,
@@ -246,7 +274,8 @@ describe("E2E Coin Toss", () => {
           FIRST_BET_NOTE.bet,
           transferNonce,
           escrowRandomness,
-          settleEscrowNonce
+          settleEscrowNonce,
+          userRandomness
         )
         .send()
         .wait();
@@ -337,6 +366,7 @@ describe("E2E Coin Toss", () => {
 
       // Approve the transfer of tokens from user
       const transferNonce = Fr.random();
+      const userRandomness = Fr.random();
       const transferAction = token.methods.transfer(
         user.getAddress(),
         coinToss.address,
@@ -351,7 +381,8 @@ describe("E2E Coin Toss", () => {
           FIRST_BET_NOTE.bet,
           transferNonce,
           escrowRandomness,
-          settleEscrowNonce
+          settleEscrowNonce,
+          userRandomness
         )
         .send()
         .wait();
@@ -450,6 +481,7 @@ describe("E2E Coin Toss", () => {
 
       // Create amount of transfer authwits from the user
       const transferNonces = Array.from({ length: amount }, () => Fr.random());
+      const userRandomness = Array.from({ length: amount }, () => Fr.random());
       const transferActions = transferNonces.map((nonce: Fr) =>
         token.methods.transfer(
           user.getAddress(),
@@ -471,6 +503,7 @@ describe("E2E Coin Toss", () => {
             userTransferNonce: transferNonces[index],
             houseEscrowRandomness: escrowsCreated[index].randomness,
             houseSettleEscrowNonce: escrowsCreated[index].authNonce,
+            userRandomness: userRandomness[index]
           };
         })
       );
@@ -576,6 +609,7 @@ const sendBetBatch = async (
     userTransferNonce: Fr;
     houseEscrowRandomness: Fr;
     houseSettleEscrowNonce: Fr;
+    userRandomness: Fr;
   }[]
 ) => {
   const batchBets = new BatchCall(
@@ -586,13 +620,15 @@ const sendBetBatch = async (
         userTransferNonce,
         houseEscrowRandomness,
         houseSettleEscrowNonce,
+        userRandomness
       }) =>
         coinToss.methods
           .create_bet(
             betNote.bet,
             userTransferNonce,
             houseEscrowRandomness,
-            houseSettleEscrowNonce
+            houseSettleEscrowNonce,
+            userRandomness
           )
           .request()
     )
@@ -607,7 +643,7 @@ const addConfigNotesToPxe = async (
   txHash: TxHash
 ) => {
   const divinityAsFr = divinity.getAddress().toField();
-  const privateOracleAsFr = mock_oracle.getAddress().toField();
+  const privateOracleAsFr = oracle.address.toField();
   const houseAsFr = house.getAddress().toField();
   const tokenAsFr = token.address.toField();
   const betAmountAsFr = new Fr(BET_AMOUNT);
@@ -657,13 +693,13 @@ const mintTokenFor = async (
   const secret = Fr.random();
   const secretHash = await computeMessageSecretHash(secret);
 
-  const recipt = await token
+  const receipt = await token
     .withWallet(minter)
     .methods.mint_private(amount, secretHash)
     .send()
     .wait();
 
-  await addPendingShieldNoteToPXE(minter, amount, secretHash, recipt.txHash);
+  await addPendingShieldNoteToPXE(minter, amount, secretHash, receipt.txHash);
 
   await token
     .withWallet(minter)

@@ -6,6 +6,11 @@ contract CoinToss {
     use crate::types::config_note::{ConfigNote, ConfigNoteMethods, CONFIG_NOTE_LEN};
     use crate::types::result_note::{ResultNote, ResultNoteMethods, RESULT_NOTE_LEN};
  
+    use crate::types::oracle::{
+        PrivateOraclePrivateContextInterface,
+        FromSubmitQuestionStruct,
+        DivinityAddressSubmitQuestionStruct
+    };
     use crate::types::token::{
         TokenPrivateContextInterface, 
         FromTransferStruct, 
@@ -76,27 +81,33 @@ contract CoinToss {
 
     // House shares off-chain with the user the preimage for an escrow note for the bet_amount and an authwit to consume it
     #[aztec(private)]
-    fn create_bet(bet: bool, userTransferNonce: Field, houseEscrowRandomness: Field, houseSettleEscrowNonce: Field) {
+    fn create_bet(bet: bool, userTransferNonce: Field, houseEscrowRandomness: Field, houseSettleEscrowNonce: Field, user_question: Field) {
         let sender = AztecAddress::new(context.msg_sender());
         let config_note = storage.config.get_note();
         let house = config_note.house;
         let token = config_note.token;
+        let divinity = config_note.divinity;
+        let oracle = config_note.private_oracle;
         let bet_amount = config_note.bet_amount;
         let address_this = AztecAddress::new(context.this_address());
 
+        let oracle_contract = PrivateOraclePrivateContextInterface::at(oracle.address);
+        let oracle_fee = oracle_contract.get_fee_note(&mut context)[0];
+        let user_fees = bet_amount + oracle_fee;
+
         let token_contract = TokenPrivateContextInterface::at(token.address);
 
-        // We transfer private tokens from the user to the coin toss 
+        // // We transfer private tokens from the user to the coin toss 
         let _ = token_contract.transfer(
             &mut context,
             FromTransferStruct { address: sender.address },
             ToTransferStruct { address: address_this.address },
-            bet_amount,
+            user_fees,
             userTransferNonce
         );
 
-        // We consume the escrow from the house
-        let __ = token_contract.settle_escrow(
+        // // We consume the escrow from the house
+        let ___ = token_contract.settle_escrow(
             &mut context,
             OwnerSettleEscrowStruct { address: house.address },
             RecipientSettleEscrowStruct { address: address_this.address }, 
@@ -113,28 +124,44 @@ contract CoinToss {
             0
         )[0];
 
-        // Share with the user and the house
-        let ___ = token_contract.broadcast_escrow_note_for(
-            &mut context,
-            [
-                AccountsBroadcastEscrowNoteForStruct { address: sender.address },
-                AccountsBroadcastEscrowNoteForStruct { address: house.address }, 
-                AccountsBroadcastEscrowNoteForStruct { address: 0 },
-                AccountsBroadcastEscrowNoteForStruct { address: 0 }
-            ],
-            escrow_randomness
-        );
+        if (escrow_randomness != 0) {
+            // Share with the user and the house
+            let ____ = token_contract.broadcast_escrow_note_for(
+                &mut context,
+                [
+                    AccountsBroadcastEscrowNoteForStruct { address: sender.address },
+                    AccountsBroadcastEscrowNoteForStruct { address: house.address }, 
+                    AccountsBroadcastEscrowNoteForStruct { address: 0 },
+                    AccountsBroadcastEscrowNoteForStruct { address: 0 }
+                ],
+                escrow_randomness
+            );
 
-        let mut user_bet: BetNote = BetNote::new(sender, bet, escrow_randomness);
-        storage.bets.insert(&mut user_bet, true);
+            let mut user_bet: BetNote = BetNote::new(sender, bet, escrow_randomness);
+            storage.bets.insert(&mut user_bet, true);
 
-        emit_encrypted_log(
-            &mut context,
-            address_this.address,
-            BETS_SLOT,
-            get_public_key(house.address),
-            user_bet.serialize(),
-        );
+            emit_encrypted_log(
+                &mut context,
+                address_this.address,
+                BETS_SLOT,
+                get_public_key(house.address),
+                user_bet.serialize(),
+            );
+
+            let callback = [address_this.address, sender.address, user_bet.bet_id, house.address, 0 ,0];
+
+            let __ = oracle_contract.submit_question(
+                &mut context,
+                FromSubmitQuestionStruct { address: address_this.address },
+                user_question,
+                DivinityAddressSubmitQuestionStruct{ address: divinity.address },
+                0,
+                callback,
+            );
+
+        } else {
+            assert(false, "Escrow randomness can't be 0");
+        }
     }
 
     // Callback triggered on submit_answer in the oracle (add the result to both the user and the house).

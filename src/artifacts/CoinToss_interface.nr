@@ -24,15 +24,17 @@ impl CoinTossPrivateContextInterface {
     bet: bool,
     userTransferNonce: Field,
     houseEscrowRandomness: Field,
-    houseSettleEscrowNonce: Field
+    houseSettleEscrowNonce: Field,
+    user_question: Field
   ) -> [Field; RETURN_VALUES_LENGTH] {
-    let mut serialized_args = [0; 4];
+    let mut serialized_args = [0; 5];
     serialized_args[0] = bet as Field;
     serialized_args[1] = userTransferNonce;
     serialized_args[2] = houseEscrowRandomness;
     serialized_args[3] = houseSettleEscrowNonce;
+    serialized_args[4] = user_question;
 
-    context.call_private_function(self.address, 0x4fa9725e, serialized_args)
+    context.call_private_function(self.address, 0x29165130, serialized_args)
   }
   
 
