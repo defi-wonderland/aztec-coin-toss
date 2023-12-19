@@ -119,20 +119,20 @@ describe("E2E Coin Toss", () => {
           await expect(createBetTx.simulate()).rejects.toThrowError(`Invalid escrow amount`);
         });
 
-        it("Reverts if the escrow provided by the house is higher than the bet amount", async () => {
-          const {escrowRandom, settleEscrowNonce} = await createEscrowWithAmount(BET_AMOUNT + 1n);
-  
-          // Approve the transfer of tokens from user
-          const transferNonce = Fr.random();
-          const transferAction = token.methods.transfer(user.getAddress(), coinToss.address, BET_AMOUNT, transferNonce);
-          await createAuth(transferAction, user, coinToss.address);
-  
-          const createBetTx = await coinToss
-            .withWallet(user)
-            .methods.create_bet(FIRST_BET_NOTE.bet, transferNonce, escrowRandom, settleEscrowNonce);
-  
-            await expect(createBetTx.simulate()).rejects.toThrowError(`Invalid escrow amount`);
-          });
+      it("Reverts if the escrow provided by the house is higher than the bet amount", async () => {
+        const {escrowRandom, settleEscrowNonce} = await createEscrowWithAmount(BET_AMOUNT + 1n);
+
+        // Approve the transfer of tokens from user
+        const transferNonce = Fr.random();
+        const transferAction = token.methods.transfer(user.getAddress(), coinToss.address, BET_AMOUNT, transferNonce);
+        await createAuth(transferAction, user, coinToss.address);
+
+        const createBetTx = await coinToss
+          .withWallet(user)
+          .methods.create_bet(FIRST_BET_NOTE.bet, transferNonce, escrowRandom, settleEscrowNonce);
+
+          await expect(createBetTx.simulate()).rejects.toThrowError(`Invalid escrow amount`);
+      });
     })
 
     it("Tx to create_bet is mined", async () => {

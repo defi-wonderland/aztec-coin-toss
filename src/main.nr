@@ -76,7 +76,7 @@ contract CoinToss {
 
     // House shares off-chain with the user the preimage for an escrow note for the bet_amount and an authwit to consume it
     #[aztec(private)]
-    fn create_bet(bet: bool, user_transfer_nonce: Field, house_escrow: Field, house_settle_escrow_nonce: Field) {
+    fn create_bet(bet: bool, user_transfer_nonce: Field, house_escrow: Field, settle_escrow_nonce: Field) {
         let sender = AztecAddress::new(context.msg_sender());
         let config_note = storage.config.get_note();
 
@@ -101,47 +101,13 @@ contract CoinToss {
 
         assert(house_escrow_note == config_note.bet_amount, "Invalid escrow amount");
 
-        // We consume the escrow from the house
-        let __ = token_contract.settle_escrow(
-            &mut context,
-            OwnerSettleEscrowStruct { address: config_note.house.address },
-            RecipientSettleEscrowStruct { address: address_this.address }, 
-            house_escrow,
-            house_settle_escrow_nonce
-        );
-
-        // Create a combined escrow with both amounts
-        let escrow_randomness = token_contract.escrow(
-            &mut context,
-            FromEscrowStruct { address: address_this.address },
-            OwnerEscrowStruct { address: address_this.address },
-            config_note.bet_amount * 2,
-            0
-        )[0];
+        let emit_escrow_selector = compute_selector("_create_bet_escrow((Field),Field,Field)");
         
-        // This reverts with 'Array size exceeds target length'
-        // let ____ = _emit_bet_escrow(
-        //     context.inputs, 
-        //     escrow_randomness, 
-        // );
-
-        // Uncommneting this reverts with the error 'self.len as u64 < MaxLen as u64'
-        // // This if is neccesary to avoid the error: 'internal error: entered unreachable code: Cannot flatten a dynamic array'
-        // if(escrow_randomness != 0) {
-        //     // Share with the user and the house
-        //     token_contract.broadcast_escrow_note_for(
-        //         &mut context,
-        //         [
-        //             AccountsBroadcastEscrowNoteForStruct { address: sender.address },
-        //             AccountsBroadcastEscrowNoteForStruct { address: config_note.house.address },
-        //             AccountsBroadcastEscrowNoteForStruct { address: 0 },
-        //             AccountsBroadcastEscrowNoteForStruct { address: 0 }
-        //         ],
-        //         escrow_randomness
-        //     );
-        // } else {
-        //     assert(false, "escrow_randomness is 0");
-        // }
+        let escrow_randomness = context.call_private_function(
+            address_this.address,
+            emit_escrow_selector,
+            [sender.address, house_escrow, settle_escrow_nonce])[0];
+        
 
         let mut user_bet: BetNote = BetNote::new(sender, bet, escrow_randomness);
         storage.bets.insert(&mut user_bet, true);
@@ -206,13 +172,34 @@ contract CoinToss {
     }
 
     #[aztec(private)]
-    internal fn _emit_bet_escrow(
-        escrow_randomness: Field,
-    ) {
-        let sender = AztecAddress::new(context.msg_sender());
+    #[internal]
+    fn _create_bet_escrow(
+        sender: AztecAddress,
+        house_escrow: Field,
+        settle_escrow_nonce: Field
+    ) -> Field {
+        let address_this = AztecAddress::new(context.this_address());
         let config_note = storage.config.get_note();
 
         let token_contract = TokenPrivateContextInterface::at(config_note.token.address);
+
+        // We consume the escrow from the house
+        let __ = token_contract.settle_escrow(
+            &mut context,
+            OwnerSettleEscrowStruct { address: config_note.house.address },
+            RecipientSettleEscrowStruct { address: address_this.address }, 
+            house_escrow,
+            settle_escrow_nonce
+        );
+
+        // Create a combined escrow with both amounts
+        let escrow_randomness = token_contract.escrow(
+            &mut context,
+            FromEscrowStruct { address: address_this.address },
+            OwnerEscrowStruct { address: address_this.address },
+            config_note.bet_amount * 2,
+            0
+        )[0];
 
         // Share with the user and the house
          let _ = token_contract.broadcast_escrow_note_for(
@@ -225,6 +212,8 @@ contract CoinToss {
              ],
              escrow_randomness
         );
+        
+        escrow_randomness
     }
 
     // Returns the divinity address

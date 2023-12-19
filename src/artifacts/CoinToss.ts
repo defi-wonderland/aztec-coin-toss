@@ -79,14 +79,14 @@ export class CoinTossContract extends ContractBase {
   /** Type-safe wrappers for the public methods exposed by the contract. */
   public methods!: {
     
-    /** _emit_bet_escrow(escrow_randomness: field) */
-    _emit_bet_escrow: ((escrow_randomness: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** _emit_bet_escrow(sender: struct, house_escrow: field, settle_escrow_nonce: field) */
+    _emit_bet_escrow: ((sender: AztecAddressLike, house_escrow: FieldLike, settle_escrow_nonce: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** compute_note_hash_and_nullifier(contract_address: field, nonce: field, storage_slot: field, preimage: array) */
     compute_note_hash_and_nullifier: ((contract_address: FieldLike, nonce: FieldLike, storage_slot: FieldLike, preimage: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** create_bet(bet: boolean, user_transfer_nonce: field, house_escrow: field, house_settle_escrow_nonce: field) */
-    create_bet: ((bet: boolean, user_transfer_nonce: FieldLike, house_escrow: FieldLike, house_settle_escrow_nonce: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** create_bet(bet: boolean, user_transfer_nonce: field, house_escrow: field, settle_escrow_nonce: field) */
+    create_bet: ((bet: boolean, user_transfer_nonce: FieldLike, house_escrow: FieldLike, settle_escrow_nonce: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** get_config_unconstrained() */
     get_config_unconstrained: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
