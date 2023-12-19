@@ -55,14 +55,14 @@ export class CoinTossContract extends ContractBase {
   /**
    * Creates a tx to deploy a new instance of this contract.
    */
-  public static deploy(wallet: Wallet, divinity: AztecAddressLike, private_oracle: AztecAddressLike, house: AztecAddressLike, bet_amount: FieldLike) {
+  public static deploy(wallet: Wallet, divinity: AztecAddressLike, private_oracle: AztecAddressLike, house: AztecAddressLike, token: AztecAddressLike, bet_amount: FieldLike) {
     return new DeployMethod<CoinTossContract>(Point.ZERO, wallet, CoinTossContractArtifact, Array.from(arguments).slice(1));
   }
 
   /**
    * Creates a tx to deploy a new instance of this contract using the specified public key to derive the address.
    */
-  public static deployWithPublicKey(publicKey: PublicKey, wallet: Wallet, divinity: AztecAddressLike, private_oracle: AztecAddressLike, house: AztecAddressLike, bet_amount: FieldLike) {
+  public static deployWithPublicKey(publicKey: PublicKey, wallet: Wallet, divinity: AztecAddressLike, private_oracle: AztecAddressLike, house: AztecAddressLike, token: AztecAddressLike, bet_amount: FieldLike) {
     return new DeployMethod<CoinTossContract>(publicKey, wallet, CoinTossContractArtifact, Array.from(arguments).slice(2));
   }
   
@@ -79,11 +79,14 @@ export class CoinTossContract extends ContractBase {
   /** Type-safe wrappers for the public methods exposed by the contract. */
   public methods!: {
     
+    /** _emit_bet_escrow(sender: struct, house_escrow: field, settle_escrow_nonce: field) */
+    _emit_bet_escrow: ((sender: AztecAddressLike, house_escrow: FieldLike, settle_escrow_nonce: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
     /** compute_note_hash_and_nullifier(contract_address: field, nonce: field, storage_slot: field, preimage: array) */
     compute_note_hash_and_nullifier: ((contract_address: FieldLike, nonce: FieldLike, storage_slot: FieldLike, preimage: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** create_bet(bet: boolean) */
-    create_bet: ((bet: boolean) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** create_bet(bet: boolean, user_transfer_nonce: field, house_escrow: field, settle_escrow_nonce: field) */
+    create_bet: ((bet: boolean, user_transfer_nonce: FieldLike, house_escrow: FieldLike, settle_escrow_nonce: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** get_config_unconstrained() */
     get_config_unconstrained: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
