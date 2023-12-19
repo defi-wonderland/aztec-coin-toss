@@ -76,32 +76,38 @@ contract CoinToss {
 
     // House shares off-chain with the user the preimage for an escrow note for the bet_amount and an authwit to consume it
     #[aztec(private)]
-    fn create_bet(bet: bool, userTransferNonce: Field, houseEscrowRandomness: Field, houseSettleEscrowNonce: Field) {
+    fn create_bet(bet: bool, user_transfer_nonce: Field, house_escrow: Field, house_settle_escrow_nonce: Field) {
         let sender = AztecAddress::new(context.msg_sender());
         let config_note = storage.config.get_note();
-        let house = config_note.house;
-        let token = config_note.token;
-        let bet_amount = config_note.bet_amount;
+
         let address_this = AztecAddress::new(context.this_address());
 
-        let token_contract = TokenPrivateContextInterface::at(token.address);
+        let token_contract = TokenPrivateContextInterface::at(config_note.token.address);
 
         // We transfer private tokens from the user to the coin toss 
         let _ = token_contract.transfer(
             &mut context,
             FromTransferStruct { address: sender.address },
             ToTransferStruct { address: address_this.address },
-            bet_amount,
-            userTransferNonce
+            config_note.bet_amount,
+            user_transfer_nonce
         );
+
+        // Check that the escrow provided has the correct amount of tokens
+        let house_escrow_note = token_contract.get_escrow(
+            &mut context,
+            house_escrow
+        )[0];
+
+        assert(house_escrow_note == config_note.bet_amount, "Invalid escrow amount");
 
         // We consume the escrow from the house
         let __ = token_contract.settle_escrow(
             &mut context,
-            OwnerSettleEscrowStruct { address: house.address },
+            OwnerSettleEscrowStruct { address: config_note.house.address },
             RecipientSettleEscrowStruct { address: address_this.address }, 
-            houseEscrowRandomness,
-            houseSettleEscrowNonce
+            house_escrow,
+            house_settle_escrow_nonce
         );
 
         // Create a combined escrow with both amounts
@@ -109,21 +115,33 @@ contract CoinToss {
             &mut context,
             FromEscrowStruct { address: address_this.address },
             OwnerEscrowStruct { address: address_this.address },
-            bet_amount * 2,
+            config_note.bet_amount * 2,
             0
         )[0];
+        
+        // This reverts with 'Array size exceeds target length'
+        // let ____ = _emit_bet_escrow(
+        //     context.inputs, 
+        //     escrow_randomness, 
+        // );
 
-        // Share with the user and the house
-        let ___ = token_contract.broadcast_escrow_note_for(
-            &mut context,
-            [
-                AccountsBroadcastEscrowNoteForStruct { address: sender.address },
-                AccountsBroadcastEscrowNoteForStruct { address: house.address },
-                AccountsBroadcastEscrowNoteForStruct { address: 0 },
-                AccountsBroadcastEscrowNoteForStruct { address: 0 }
-            ],
-            escrow_randomness
-        );
+        // Uncommneting this reverts with the error 'self.len as u64 < MaxLen as u64'
+        // // This if is neccesary to avoid the error: 'internal error: entered unreachable code: Cannot flatten a dynamic array'
+        // if(escrow_randomness != 0) {
+        //     // Share with the user and the house
+        //     token_contract.broadcast_escrow_note_for(
+        //         &mut context,
+        //         [
+        //             AccountsBroadcastEscrowNoteForStruct { address: sender.address },
+        //             AccountsBroadcastEscrowNoteForStruct { address: config_note.house.address },
+        //             AccountsBroadcastEscrowNoteForStruct { address: 0 },
+        //             AccountsBroadcastEscrowNoteForStruct { address: 0 }
+        //         ],
+        //         escrow_randomness
+        //     );
+        // } else {
+        //     assert(false, "escrow_randomness is 0");
+        // }
 
         let mut user_bet: BetNote = BetNote::new(sender, bet, escrow_randomness);
         storage.bets.insert(&mut user_bet, true);
@@ -132,7 +150,7 @@ contract CoinToss {
             &mut context,
             address_this.address,
             BETS_SLOT,
-            get_public_key(house.address),
+            get_public_key(config_note.house.address),
             user_bet.serialize(),
         );
     }
@@ -157,7 +175,6 @@ contract CoinToss {
     fn settle_bet(bet_id: Field) {
         // Place holder, oracle auth MUST be checked here
         // assert(ResultNote.sender.address == config_note.private_oracle.address, "Unauthorized callback");
-
         let config_note = storage.config.get_note();
         let house = config_note.house;
         let token = config_note.token;
@@ -180,12 +197,34 @@ contract CoinToss {
                 &mut context,
                 OwnerSettleEscrowStruct { address: address_this.address },
                 RecipientSettleEscrowStruct { address: receiver.address }, 
-                note.escrow_randomness,
+                bet_id,
                 0
             );
         } else {
             assert(false, "Bet not found");
         }
+    }
+
+    #[aztec(private)]
+    internal fn _emit_bet_escrow(
+        escrow_randomness: Field,
+    ) {
+        let sender = AztecAddress::new(context.msg_sender());
+        let config_note = storage.config.get_note();
+
+        let token_contract = TokenPrivateContextInterface::at(config_note.token.address);
+
+        // Share with the user and the house
+         let _ = token_contract.broadcast_escrow_note_for(
+             &mut context,
+             [
+                 AccountsBroadcastEscrowNoteForStruct { address: sender.address },
+                 AccountsBroadcastEscrowNoteForStruct { address: config_note.house.address },
+                 AccountsBroadcastEscrowNoteForStruct { address: 0 },
+                 AccountsBroadcastEscrowNoteForStruct { address: 0 }
+             ],
+             escrow_randomness
+        );
     }
 
     // Returns the divinity address
