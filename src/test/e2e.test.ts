@@ -202,10 +202,7 @@ describe("E2E Coin Toss", () => {
         )[0]._value
       );
 
-      type BetNoteWithoutRandomness = Omit<
-        BetNote,
-        "bet_id" | "escrow_randomness"
-      >;
+      type BetNoteWithoutId = Omit<BetNote, "bet_id">;
 
       // Check: Compare the note's data with the expected values
       const betNote: BetNoteWithoutId = {
@@ -265,59 +262,6 @@ describe("E2E Coin Toss", () => {
         .view({ from: user.getAddress() });
 
       expect(userBalance).toBe(MINT_TOKENS - BET_AMOUNT);
-    });
-  });
-
-  describe("settle_bet()", () => {
-    let houseBalance: bigint;
-
-    it("Tx to settle_bet is mined", async () => {
-      // Save the private balance of the house
-      houseBalance = await token
-        .withWallet(house)
-        .methods.balance_of_private(house.getAddress())
-        .view({ from: house.getAddress() });
-
-      const receipt = await coinToss
-        .withWallet(user)
-        .methods.settle_bet(betIdUser)
-        .send()
-        .wait();
-
-      expect(receipt.status).toBe("mined");
-    });
-
-    it("Sends the tokens to the correct party", async () => {
-      // Get the new private balance of the house
-      const newHouseBalance = await token
-        .withWallet(house)
-        .methods.balance_of_private(house.getAddress())
-        .view({ from: house.getAddress() });
-
-      // Check that the house got the tokens
-      expect(newHouseBalance).toBe(houseBalance + BET_AMOUNT * 2n);
-    });
-
-    it("Nullifies the bet note", async () => {
-      const betNote = (
-        await coinToss
-          .withWallet(house)
-          .methods.get_user_bets_unconstrained(user.getAddress(), 0n)
-          .view({ from: house.getAddress() })
-      ).find((noteObj: any) => noteObj._value.randomness == betIdUser);
-
-      expect(betNote).toBeUndefined();
-    });
-
-    it("Nullifies the escrow note", async () => {
-      const escrowNote = (
-        await token
-          .withWallet(house)
-          .methods.get_escrows(0)
-          .view({ from: house.getAddress() })
-      ).find((noteObj: any) => noteObj._value.randomness == betIdUser);
-
-      expect(escrowNote).toBeUndefined();
     });
   });
 
@@ -518,7 +462,7 @@ describe("E2E Coin Toss", () => {
           .withWallet(house)
           .methods.get_user_bets_unconstrained(user.getAddress(), 0n)
           .view({ from: house.getAddress() })
-      ).find((noteObj: any) => noteObj._value.bet_id == userRandomness);
+      ).find((noteObj: any) => noteObj._value.bet_id == betId);
 
       expect(betNote).toBeUndefined();
     });
@@ -529,7 +473,7 @@ describe("E2E Coin Toss", () => {
           .withWallet(house)
           .methods.get_escrows(0)
           .view({ from: house.getAddress() })
-      ).find((noteObj: any) => noteObj._value.bet_id == userEscrowRandomness);
+      ).find((noteObj: any) => noteObj._value.bet_id == betId);
 
       expect(escrowNote).toBeUndefined();
     });

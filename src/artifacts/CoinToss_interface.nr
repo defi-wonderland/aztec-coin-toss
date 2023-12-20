@@ -4,7 +4,7 @@ use dep::std;
 use dep::aztec::context::{ PrivateContext, PublicContext };
 use dep::protocol_types::constants::RETURN_VALUES_LENGTH;
 
-struct SenderEmitBetEscrowStruct {
+struct SenderCreateBetEscrowStruct {
   address: Field,
 }
 
@@ -21,10 +21,10 @@ impl CoinTossPrivateContextInterface {
       }
   }
   
-  pub fn _emit_bet_escrow(
+  pub fn _create_bet_escrow(
     self,
     context: &mut PrivateContext,
-    sender: SenderEmitBetEscrowStruct,
+    sender: SenderCreateBetEscrowStruct,
     house_escrow: Field,
     settle_escrow_nonce: Field
   ) -> [Field; RETURN_VALUES_LENGTH] {
@@ -33,7 +33,7 @@ impl CoinTossPrivateContextInterface {
     serialized_args[1] = house_escrow;
     serialized_args[2] = settle_escrow_nonce;
 
-    context.call_private_function(self.address, 0x62cce1e8, serialized_args)
+    context.call_private_function(self.address, 0xf2b57078, serialized_args)
   }
   
 
