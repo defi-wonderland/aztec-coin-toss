@@ -53,7 +53,7 @@ impl BetNote {
         dep::std::hash::pedersen_hash([
             self.owner.address,
             self.bet_id,
-            self.bet as Field,
+            self.bet as Field
         ])
     }
 

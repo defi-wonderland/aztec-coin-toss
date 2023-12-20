@@ -50,7 +50,7 @@ contract CoinToss {
     struct Storage {
         config: ImmutableSingleton<ConfigNote, CONFIG_NOTE_LEN>,
         bets: Set<BetNote, BET_NOTE_LEN>,
-        result: Set<ResultNote, RESULT_NOTE_LEN>
+        results: Set<ResultNote, RESULT_NOTE_LEN>
     }
 
     impl Storage {
@@ -62,7 +62,7 @@ contract CoinToss {
                     ConfigNoteMethods,
                 ),
                 bets: Set::new(context, BETS_SLOT, BetNoteMethods),
-                result: Set::new(context, RESULT_SLOT, ResultNoteMethods)
+                results: Set::new(context, RESULT_SLOT, ResultNoteMethods)
             }
         }
     }
@@ -79,7 +79,8 @@ contract CoinToss {
     fn create_bet(bet: bool, user_transfer_nonce: Field, house_escrow: Field, settle_escrow_nonce: Field) {
         let sender = AztecAddress::new(context.msg_sender());
         let config_note = storage.config.get_note();
-
+        let house = config_note.house;
+        let bet_amount = config_note.bet_amount;
         let address_this = AztecAddress::new(context.this_address());
 
         let token_contract = TokenPrivateContextInterface::at(config_note.token.address);
@@ -89,7 +90,7 @@ contract CoinToss {
             &mut context,
             FromTransferStruct { address: sender.address },
             ToTransferStruct { address: address_this.address },
-            config_note.bet_amount,
+            bet_amount,
             user_transfer_nonce
         );
 
@@ -99,7 +100,7 @@ contract CoinToss {
             house_escrow
         )[0];
 
-        assert(house_escrow_note == config_note.bet_amount, "Invalid escrow amount");
+        assert(house_escrow_note == bet_amount, "Invalid escrow amount");
 
         let emit_escrow_selector = compute_selector("_create_bet_escrow((Field),Field,Field)");
         
@@ -123,7 +124,7 @@ contract CoinToss {
 
     // Callback triggered on submit_answer in the oracle (add the result to both the user and the house).
     // data[0]: user address
-    // data[1]: bet "id" (the randomness generated when creating the bet note)
+    // data[1]: bet_id (the randomness generated when creating the bet note)
     // data[2]: house address
     // data[2:5]: unused
     #[aztec(private)]
@@ -133,31 +134,38 @@ contract CoinToss {
         let mut result_note_user = ResultNote::new(AztecAddress::new(data[0]), sender, data[1], answer as bool);
         let mut result_note_house = ResultNote::new(AztecAddress::new(data[2]), sender, data[1], answer as bool);
 
-        storage.result.insert(&mut result_note_user, true);
-        storage.result.insert(&mut result_note_house, true);
+        storage.results.insert(&mut result_note_user, true);
+        storage.results.insert(&mut result_note_house, true);
     }
 
     #[aztec(private)]
     fn settle_bet(bet_id: Field) {
-        // Place holder, oracle auth MUST be checked here
-        // assert(ResultNote.sender.address == config_note.private_oracle.address, "Unauthorized callback");
         let config_note = storage.config.get_note();
+
         let house = config_note.house;
         let token = config_note.token;
+        let oracle = config_note.private_oracle;
+        
         let address_this = AztecAddress::new(context.this_address());
+        
         let bets = storage.bets;
 
         let options = NoteGetterOptions::new().select(1, bet_id).set_limit(1);
-        let notes = bets.get_notes(options);
+        let bet_notes = bets.get_notes(options);
         
-        if(notes[0].is_some()) {
-            let note = notes[0].unwrap_unchecked();
+        if(bet_notes[0].is_some()) {
+            let note = bet_notes[0].unwrap_unchecked();
 
-            // TODO: Change receiver depending on the winner
-            let receiver = house;
+            // Filter by bet_id and result sender (which must be the oracle)
+            let result_getter_option = NoteGetterOptions::new().select(2, bet_id).select(1, oracle.address).set_limit(1);
+            let result_note = storage.results.get_notes(result_getter_option)[0];
 
-            // Nullify the bet note
-            bets.remove(note);
+            assert(result_note.is_some(), "Invalid bet result (not settled yet or wrong oracle)");
+
+            let result = result_note.unwrap_unchecked().result;
+
+            // Send the bet amount to the winner
+            let receiver = if(result == note.bet) { note.owner } else { house };
 
             let _ = TokenPrivateContextInterface::at(token.address).settle_escrow(
                 &mut context,
@@ -166,6 +174,9 @@ contract CoinToss {
                 bet_id,
                 0
             );
+
+            // Nullify the bet note
+            bets.remove(note);
         } else {
             assert(false, "Bet not found");
         }
@@ -228,7 +239,7 @@ contract CoinToss {
 
     unconstrained fn get_results_unconstrained(owner: AztecAddress, start_offset: u32) -> [Option<ResultNote>; 10] {
         let results_getter_option = NoteViewerOptions::new().select(0, owner.address).set_offset(start_offset);
-        storage.result.view_notes(results_getter_option)
+        storage.results.view_notes(results_getter_option)
     }
 
     // Computes note hash and nullifier.
