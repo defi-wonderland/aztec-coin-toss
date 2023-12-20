@@ -3,7 +3,6 @@ import { AztecAddress } from "@aztec/aztec.js";
 export class BetNote {
   owner: AztecAddress;
   bet_id: bigint;
-  escrow_randomness: bigint;
   bet: boolean;
 
   constructor(note: any) {
@@ -11,7 +10,6 @@ export class BetNote {
       note.owner.address || note.owner.asBigInt
     );
     this.bet_id = note.bet_id;
-    this.escrow_randomness = note.escrow_randomness;
     this.bet = note.bet;
   }
 }

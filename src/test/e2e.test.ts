@@ -58,11 +58,8 @@ beforeAll(async () => {
 describe("E2E Coin Toss", () => {
   let USER_BET_NOTES: BetNote[];
   let FIRST_BET_NOTE: BetNote;
-  let userRandomness: bigint;
-  let houseRandomness: bigint;
-
-  let userEscrowRandomness: bigint;
-  let houseEscrowRandomness: bigint;
+  let betIdUser: bigint;
+  let betIdHouse: bigint;
 
   beforeAll(async () => {
     USER_BET_NOTES = createUserBetNotes(4);
@@ -107,6 +104,64 @@ describe("E2E Coin Toss", () => {
   }, 120_000);
 
   describe("create_bet(..)", () => {
+    describe("errors", () => {
+      it("Reverts if the escrow provided by the house is lower than the bet amount", async () => {
+        const { escrowRandom, settleEscrowNonce } =
+          await createEscrowWithAmount(BET_AMOUNT - 1n);
+
+        // Approve the transfer of tokens from user
+        const transferNonce = Fr.random();
+        const transferAction = token.methods.transfer(
+          user.getAddress(),
+          coinToss.address,
+          BET_AMOUNT,
+          transferNonce
+        );
+        await createAuth(transferAction, user, coinToss.address);
+
+        const createBetTx = await coinToss
+          .withWallet(user)
+          .methods.create_bet(
+            FIRST_BET_NOTE.bet,
+            transferNonce,
+            escrowRandom,
+            settleEscrowNonce
+          );
+
+        await expect(createBetTx.simulate()).rejects.toThrowError(
+          `Invalid escrow amount`
+        );
+      });
+
+      it("Reverts if the escrow provided by the house is higher than the bet amount", async () => {
+        const { escrowRandom, settleEscrowNonce } =
+          await createEscrowWithAmount(BET_AMOUNT + 1n);
+
+        // Approve the transfer of tokens from user
+        const transferNonce = Fr.random();
+        const transferAction = token.methods.transfer(
+          user.getAddress(),
+          coinToss.address,
+          BET_AMOUNT,
+          transferNonce
+        );
+        await createAuth(transferAction, user, coinToss.address);
+
+        const createBetTx = await coinToss
+          .withWallet(user)
+          .methods.create_bet(
+            FIRST_BET_NOTE.bet,
+            transferNonce,
+            escrowRandom,
+            settleEscrowNonce
+          );
+
+        await expect(createBetTx.simulate()).rejects.toThrowError(
+          `Invalid escrow amount`
+        );
+      });
+    });
+
     it("Tx to create_bet is mined", async () => {
       // House creates the escrow and shares with the user
       const { randomness: escrowRandomness, authNonce: settleEscrowNonce } = (
@@ -153,7 +208,7 @@ describe("E2E Coin Toss", () => {
       >;
 
       // Check: Compare the note's data with the expected values
-      const betNote: BetNoteWithoutRandomness = {
+      const betNote: BetNoteWithoutId = {
         owner: FIRST_BET_NOTE.owner,
         bet: FIRST_BET_NOTE.bet,
       };
@@ -161,8 +216,7 @@ describe("E2E Coin Toss", () => {
       expect(bet).toEqual(expect.objectContaining(betNote));
 
       // Store the random nullifier, for later comparison
-      userRandomness = bet.bet_id;
-      userEscrowRandomness = bet.escrow_randomness;
+      betIdUser = bet.bet_id;
     });
 
     it("House should have the copy of the same note as the user with correct parameters", async () => {
@@ -175,12 +229,9 @@ describe("E2E Coin Toss", () => {
         )[0]._value
       );
 
-      type BetNoteWithoutRandomness = Omit<
-        BetNote,
-        "bet_id" | "escrow_randomness"
-      >;
+      type BetNoteWithoutId = Omit<BetNote, "bet_id">;
 
-      const betNote: BetNoteWithoutRandomness = {
+      const betNote: BetNoteWithoutId = {
         owner: FIRST_BET_NOTE.owner,
         bet: FIRST_BET_NOTE.bet,
       };
@@ -188,13 +239,11 @@ describe("E2E Coin Toss", () => {
       expect(bet).toEqual(expect.objectContaining(betNote));
 
       // Store the random nullifier, for later comparison
-      houseRandomness = bet.bet_id;
-      houseEscrowRandomness = bet.escrow_randomness;
+      betIdHouse = bet.bet_id;
     });
 
     it("User and house should share the same randomness for notes, and therefore same nullifier key", async () => {
-      expect(userRandomness).toBe(houseRandomness);
-      expect(userEscrowRandomness).toBe(houseEscrowRandomness);
+      expect(betIdUser).toBe(betIdHouse);
     });
 
     it("Created a resulting escrow note with the correct parameters", async () => {
@@ -203,9 +252,7 @@ describe("E2E Coin Toss", () => {
           .withWallet(user)
           .methods.get_escrows(0)
           .view({ from: user.getAddress() })
-      ).find(
-        (noteObj: any) => noteObj._value.randomness == userEscrowRandomness
-      )._value;
+      ).find((noteObj: any) => noteObj._value.randomness == betIdUser)._value;
 
       expect(escrowNote.amount.value).toBe(BET_AMOUNT * 2n);
       expect(escrowNote.owner.address).toBe(coinToss.address.toBigInt());
@@ -218,6 +265,59 @@ describe("E2E Coin Toss", () => {
         .view({ from: user.getAddress() });
 
       expect(userBalance).toBe(MINT_TOKENS - BET_AMOUNT);
+    });
+  });
+
+  describe("settle_bet()", () => {
+    let houseBalance: bigint;
+
+    it("Tx to settle_bet is mined", async () => {
+      // Save the private balance of the house
+      houseBalance = await token
+        .withWallet(house)
+        .methods.balance_of_private(house.getAddress())
+        .view({ from: house.getAddress() });
+
+      const receipt = await coinToss
+        .withWallet(user)
+        .methods.settle_bet(betIdUser)
+        .send()
+        .wait();
+
+      expect(receipt.status).toBe("mined");
+    });
+
+    it("Sends the tokens to the correct party", async () => {
+      // Get the new private balance of the house
+      const newHouseBalance = await token
+        .withWallet(house)
+        .methods.balance_of_private(house.getAddress())
+        .view({ from: house.getAddress() });
+
+      // Check that the house got the tokens
+      expect(newHouseBalance).toBe(houseBalance + BET_AMOUNT * 2n);
+    });
+
+    it("Nullifies the bet note", async () => {
+      const betNote = (
+        await coinToss
+          .withWallet(house)
+          .methods.get_user_bets_unconstrained(user.getAddress(), 0n)
+          .view({ from: house.getAddress() })
+      ).find((noteObj: any) => noteObj._value.randomness == betIdUser);
+
+      expect(betNote).toBeUndefined();
+    });
+
+    it("Nullifies the escrow note", async () => {
+      const escrowNote = (
+        await token
+          .withWallet(house)
+          .methods.get_escrows(0)
+          .view({ from: house.getAddress() })
+      ).find((noteObj: any) => noteObj._value.randomness == betIdUser);
+
+      expect(escrowNote).toBeUndefined();
     });
   });
 
@@ -672,6 +772,35 @@ const mintTokenFor = async (
     .wait();
 };
 
+const createEscrowWithAmount = async (amount: bigint) => {
+  await token
+    .withWallet(house)
+    .methods.escrow(house.getAddress(), house.getAddress(), amount, 0)
+    .send()
+    .wait();
+  const escrowsArray = await token
+    .withWallet(house)
+    .methods.get_escrows(0)
+    .view({ from: house.getAddress() });
+  const escrowRandom = escrowsArray
+    .filter((noteObj: any) => noteObj._is_some)
+    .find((noteObj: any) => noteObj._value.amount.value == amount)
+    ._value.randomness;
+
+  const settleEscrowNonce = Fr.random();
+  const settleEscrowAction = token
+    .withWallet(house)
+    .methods.settle_escrow(
+      house.getAddress(),
+      coinToss.address,
+      escrowRandom,
+      settleEscrowNonce
+    );
+  await createAuth(settleEscrowAction, house, coinToss.address);
+
+  return { escrowRandom, settleEscrowNonce };
+};
+
 // Max is 4
 const createEscrows = async (amount: number = 4) => {
   const escrowAction = token.methods
@@ -688,21 +817,37 @@ const createEscrows = async (amount: number = 4) => {
 
 const getHouseEscrowAndAuthNonce = async (amount: number = 1) => {
   // Get the escrow
-  const escrowsArray = await token.withWallet(house).methods.get_escrows(0).view({ from: house.getAddress() });
-  const escrowsRandoms = escrowsArray.filter((noteObj: any) => noteObj._is_some).map((escrow: any) => escrow._value.randomness);
+  const escrowsArray = await token
+    .withWallet(house)
+    .methods.get_escrows(0)
+    .view({ from: house.getAddress() });
+  const escrowsRandoms = escrowsArray
+    .filter((noteObj: any) => noteObj._is_some)
+    .filter((noteObj: any) => noteObj._value.amount.value == BET_AMOUNT)
+    .map((escrow: any) => escrow._value.randomness);
   const randomness = escrowsRandoms.slice(0, amount);
 
   // Create the auth
   let authNonces = Array.from({ length: amount }, () => Fr.random());
 
   const auths = authNonces.map((nonce: Fr, index) => {
-    const settleEscrowAction = token.withWallet(house).methods.settle_escrow(house.getAddress(), coinToss.address, randomness[index], nonce);
+    const settleEscrowAction = token
+      .withWallet(house)
+      .methods.settle_escrow(
+        house.getAddress(),
+        coinToss.address,
+        randomness[index],
+        nonce
+      );
     return createAuth(settleEscrowAction, house, coinToss.address);
   });
-  await Promise.all(auths)
+  await Promise.all(auths);
 
-  return authNonces.map((nonce, index) => ({ authNonce: nonce, randomness: randomness[index] }));
-}
+  return authNonces.map((nonce, index) => ({
+    authNonce: nonce,
+    randomness: randomness[index],
+  }));
+};
 
 const createAuth = async (
   action: ContractFunctionInteraction,

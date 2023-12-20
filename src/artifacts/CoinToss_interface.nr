@@ -4,6 +4,9 @@ use dep::std;
 use dep::aztec::context::{ PrivateContext, PublicContext };
 use dep::protocol_types::constants::RETURN_VALUES_LENGTH;
 
+struct SenderEmitBetEscrowStruct {
+  address: Field,
+}
 
 
 // Interface for calling CoinToss functions from a private context
@@ -18,19 +21,35 @@ impl CoinTossPrivateContextInterface {
       }
   }
   
+  pub fn _emit_bet_escrow(
+    self,
+    context: &mut PrivateContext,
+    sender: SenderEmitBetEscrowStruct,
+    house_escrow: Field,
+    settle_escrow_nonce: Field
+  ) -> [Field; RETURN_VALUES_LENGTH] {
+    let mut serialized_args = [0; 3];
+    serialized_args[0] = sender.address;
+    serialized_args[1] = house_escrow;
+    serialized_args[2] = settle_escrow_nonce;
+
+    context.call_private_function(self.address, 0x62cce1e8, serialized_args)
+  }
+  
+
   pub fn create_bet(
     self,
     context: &mut PrivateContext,
     bet: bool,
-    userTransferNonce: Field,
-    houseEscrowRandomness: Field,
-    houseSettleEscrowNonce: Field
+    user_transfer_nonce: Field,
+    house_escrow: Field,
+    settle_escrow_nonce: Field
   ) -> [Field; RETURN_VALUES_LENGTH] {
     let mut serialized_args = [0; 4];
     serialized_args[0] = bet as Field;
-    serialized_args[1] = userTransferNonce;
-    serialized_args[2] = houseEscrowRandomness;
-    serialized_args[3] = houseSettleEscrowNonce;
+    serialized_args[1] = user_transfer_nonce;
+    serialized_args[2] = house_escrow;
+    serialized_args[3] = settle_escrow_nonce;
 
     context.call_private_function(self.address, 0x4fa9725e, serialized_args)
   }
