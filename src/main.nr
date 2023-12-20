@@ -77,7 +77,6 @@ contract CoinToss {
     // House shares off-chain with the user the preimage for an escrow note for the bet_amount and an authwit to consume it
     #[aztec(private)]
     fn create_bet(bet: bool, user_transfer_nonce: Field, house_escrow: Field, settle_escrow_nonce: Field) {
-    fn create_bet(bet: bool, userTransferNonce: Field, houseEscrowRandomness: Field, houseSettleEscrowNonce: Field) {
         let sender = AztecAddress::new(context.msg_sender());
         let config_note = storage.config.get_note();
         let house = config_note.house;
@@ -135,8 +134,8 @@ contract CoinToss {
         let mut result_note_user = ResultNote::new(AztecAddress::new(data[0]), sender, data[1], answer as bool);
         let mut result_note_house = ResultNote::new(AztecAddress::new(data[2]), sender, data[1], answer as bool);
 
-        storage.result.insert(&mut result_note_user, true);
-        storage.result.insert(&mut result_note_house, true);
+        storage.results.insert(&mut result_note_user, true);
+        storage.results.insert(&mut result_note_house, true);
     }
 
     #[aztec(private)]
@@ -172,7 +171,7 @@ contract CoinToss {
                 &mut context,
                 OwnerSettleEscrowStruct { address: address_this.address },
                 RecipientSettleEscrowStruct { address: receiver.address }, 
-                note.escrow_randomness,
+                bet_id,
                 0
             );
 
