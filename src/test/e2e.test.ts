@@ -199,6 +199,12 @@ describe("E2E Coin Toss", () => {
       expect(receipt.status).toBe("mined");
     });
 
+    // Happy path:
+    it("The bet_id should have been nullified", async () => {
+      const result = await coinToss.withWallet(user).methods.is_id_nullified(FIRST_BET_NOTE.bet_id).view({from: user.getAddress()});
+      expect(result).toBe(true);
+    });
+
     it("User bet note should have the correct parameters", async () => {
       const bet: BetNote = new BetNote(
         (

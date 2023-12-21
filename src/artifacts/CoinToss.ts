@@ -97,6 +97,9 @@ export class CoinTossContract extends ContractBase {
     /** get_user_bets_unconstrained(start_offset: integer) */
     get_user_bets_unconstrained: ((start_offset: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
+    /** is_id_nullified(bet_id: field) */
+    is_id_nullified: ((bet_id: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
     /** oracle_callback(answer: field, data: array) */
     oracle_callback: ((answer: FieldLike, data: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 

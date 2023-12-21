@@ -152,7 +152,7 @@ contract CoinToss {
             emit_escrow_selector,
             [sender.address, house_escrow, settle_escrow_nonce])[0];
 
-        let callback = [address_this.address, sender.address, unique_bet_id, config_note.house.address, 0, 0];
+        let callback = [address_this.address, sender.address, unique_bet_id, house.address, 0, 0];
 
         // We submit the question to the oracle
         let __ = oracle_contract.submit_question(
@@ -337,6 +337,14 @@ contract CoinToss {
     unconstrained fn get_results_unconstrained(owner: AztecAddress, start_offset: u32) -> [Option<ResultNote>; 10] {
         let results_getter_option = NoteViewerOptions::new().select(0, owner.address).set_offset(start_offset);
         storage.results.view_notes(results_getter_option)
+    }
+
+    /// @notice         Gets a bet note by its id
+    /// @custom:privacy unconstrained
+    /// @param          bet_id The id of the bet
+    /// @return         A boolean indicating whether this bet_id has been initialized or not
+    unconstrained fn is_id_nullified(bet_id: Field) -> bool {
+        BetNote::is_id_nullified(bet_id)
     }
 
     /// @notice         Compute the note hash and nullifier for a note

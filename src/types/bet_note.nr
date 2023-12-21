@@ -2,11 +2,6 @@
 //                             Imports                             //
 /////////////////////////////////////////////////////////////////////
 
-use dep::std::option::Option;
-use dep::protocol_types::{
-    constants::EMPTY_NULLIFIED_COMMITMENT,
-};
-
 use dep::aztec::{
     context::PrivateContext,
     log::emit_encrypted_log,
@@ -16,12 +11,21 @@ use dep::aztec::{
         utils::compute_note_hash_for_read_or_nullify,
     },
     oracle::{
-        rand::rand,
         get_public_key::get_public_key,
         get_secret_key::get_secret_key,
+        notes::check_nullifier_exists,
+        notes::check_nullifier_exists_oracle,
+        rand::rand,
     },
     types::address::AztecAddress
 };
+
+use dep::protocol_types::{
+    constants::EMPTY_NULLIFIED_COMMITMENT,
+};
+
+use dep::std::option::Option;
+
 
 /////////////////////////////////////////////////////////////////////
 //                              Class                              //
@@ -54,7 +58,8 @@ impl BetNote {
     /// @param _bet The bet outcome given by the user (true or false, representing head or tail)
     pub fn new(_context: &mut PrivateContext, _owner: AztecAddress, _bet: bool, _bet_id: Field, _escrow_randomness: Field) -> Self {
         // Nullify bet id
-        let nullifier =  dep::std::hash::pedersen_hash([_bet_id]);
+        let compute_initialization_nullifier = BetNote::generate_bet_id_nullifier;
+        let nullifier = compute_initialization_nullifier(_bet_id);
         _context.push_new_nullifier(nullifier, EMPTY_NULLIFIED_COMMITMENT);
 
         BetNote {
@@ -64,6 +69,20 @@ impl BetNote {
             escrow_randomness: _escrow_randomness,
             header: NoteHeader::empty(),
         }
+    }
+
+    /// @notice Bet note bet_id nullifying generator
+    /// @param _bet_id The id of the bet to nullify
+    pub fn generate_bet_id_nullifier(_bet_id: Field) -> Field {
+        dep::std::hash::pedersen_hash([_bet_id])
+    }
+
+    /// @notice Bet note bet_id initialization checker. Checks whether the bet_id was added to the nullifying tree
+    /// @param _bet_id The id of the bet to check for nullification status
+    unconstrained pub fn is_id_nullified(_bet_id: Field) -> bool {
+        let compute_initialization_nullifier = BetNote::generate_bet_id_nullifier;
+        let nullifier = compute_initialization_nullifier(_bet_id);
+        check_nullifier_exists(nullifier)
     }
 
     /////////////////////////////////////////////////////////////////////
