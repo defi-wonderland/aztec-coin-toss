@@ -11,9 +11,9 @@ contract CoinToss {
     /////////////////////////////////////////////////////////////////////
 
     use crate::types::oracle::{
-        PrivateOraclePrivateContextInterface, 
-        FromSubmitQuestionStruct, 
         DivinityAddressSubmitQuestionStruct, 
+        FromSubmitQuestionStruct, 
+        PrivateOraclePrivateContextInterface, 
     };
 
     use crate::types::{

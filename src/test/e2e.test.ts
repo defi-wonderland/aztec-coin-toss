@@ -116,26 +116,7 @@ describe("E2E Coin Toss", () => {
     await pxe.registerRecipient(coinToss.completeAddress);
     await pxe.registerRecipient(oracle.completeAddress);
 
-    // TODO: abstract into single function
-    await pxe.addNote(
-      new ExtendedNote(
-        new Note([new Fr(ORACLE_FEE)]),
-        user.getAddress(),
-        oracle.address,
-        FEE_SLOT,
-        oracleReceipt.txHash
-      )
-    );
-
-    await pxe.addNote(
-      new ExtendedNote(
-        new Note([new Fr(token.address.toBigInt())]),
-        user.getAddress(),
-        oracle.address,
-        TOKEN_SLOT,
-        oracleReceipt.txHash
-      )
-    );
+    await addFeeAndTokenNotesToPxe(user.getAddress(), oracleReceipt.txHash);
 
     // Add all address notes to pxe
     await addConfigNotesToPxe(
@@ -611,6 +592,32 @@ const sendBetBatch = async (
   );
 
   await batchBets.send().wait();
+};
+
+// Add the config notes to the PXE
+const addFeeAndTokenNotesToPxe = async (
+  user: AztecAddress,
+  txHash: TxHash
+) => {
+  await pxe.addNote(
+    new ExtendedNote(
+      new Note([new Fr(ORACLE_FEE)]),
+      user,
+      oracle.address,
+      FEE_SLOT,
+      txHash
+    )
+  );
+
+  await pxe.addNote(
+    new ExtendedNote(
+      new Note([new Fr(token.address.toBigInt())]),
+      user,
+      oracle.address,
+      TOKEN_SLOT,
+      txHash
+    )
+  );
 };
 
 // Add the config notes to the PXE
