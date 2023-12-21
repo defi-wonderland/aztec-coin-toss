@@ -161,7 +161,7 @@ contract CoinToss {
     ///                 data[0]: user address
     ///                 data[1]: bet_id (the randomness generated when creating the escrow)
     ///                 data[2]: house address
-    ///                 data[2:5]: unused
+    ///                 data[3:5]: unused
     ///                 This callback can be called by any address, but the caller is part of the result note (and constrained when settling the bet)
     /// @custom:privacy private
     /// @param          answer The bet result (true or false) from the oracle
