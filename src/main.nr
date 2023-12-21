@@ -11,43 +11,45 @@ contract CoinToss {
     //                             Imports                             //
     /////////////////////////////////////////////////////////////////////
 
-    use dep::aztec::context::Context;
-    use crate::types::bet_note::{BetNote, BetNoteMethods, BET_NOTE_LEN};
-    use crate::types::config_note::{ConfigNote, ConfigNoteMethods, CONFIG_NOTE_LEN};
-    use crate::types::result_note::{ResultNote, ResultNoteMethods, RESULT_NOTE_LEN};
- 
-    use crate::types::token::{
-        TokenPrivateContextInterface, 
-        FromTransferStruct, 
-        ToTransferStruct, 
-        FromEscrowStruct,
-        OwnerEscrowStruct,
-        RecipientSettleEscrowStruct,
-        OwnerSettleEscrowStruct,
-        AccountsBroadcastEscrowNoteForStruct
+    use crate::types::{
+        bet_note::{BetNote, BetNoteMethods, BET_NOTE_LEN},
+        config_note::{ConfigNote, ConfigNoteMethods, CONFIG_NOTE_LEN},
+        result_note::{ResultNote, ResultNoteMethods, RESULT_NOTE_LEN},
+        token::{
+            AccountsBroadcastEscrowNoteForStruct,
+            FromEscrowStruct,
+            FromTransferStruct, 
+            OwnerEscrowStruct,
+            OwnerSettleEscrowStruct,
+            RecipientSettleEscrowStruct,
+            TokenPrivateContextInterface, 
+            ToTransferStruct
+        }
     };
 
-    use dep::aztec::note::{
-        note_getter_options::NoteGetterOptions,
-        note_header::NoteHeader
-        note_viewer_options::NoteViewerOptions,
-        utils as note_utils
+    use dep::aztec::{
+        context::Context,
+        log::emit_encrypted_log,
+        note::{
+            note_getter_options::NoteGetterOptions,
+            note_header::NoteHeader,
+            note_viewer_options::NoteViewerOptions,
+            utils as note_utils
+        },
+        oracle::{
+            get_public_key::get_public_key,
+            rand::rand
+        },
+        selector::compute_selector,
+        state_vars::{
+            immutable_singleton::ImmutableSingleton,
+            set::Set
+        },
+        types::address::AztecAddress
     };
 
     use dep::std::option::Option;
-
-    use dep::aztec::log::emit_encrypted_log;
-    use dep::aztec::oracle::{
-        get_public_key::get_public_key,
-        rand::rand
-    };
-    use dep::aztec::state_vars::{
-        set::Set,
-        immutable_singleton::ImmutableSingleton
-    };
-    use dep::aztec::selector::compute_selector;
-    use dep::aztec::types::address::AztecAddress;
-
+    
     /////////////////////////////////////////////////////////////////////
     //                             Storage                             //
     /////////////////////////////////////////////////////////////////////
