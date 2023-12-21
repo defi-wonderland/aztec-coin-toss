@@ -1,6 +1,16 @@
 mod types;
 
+
+/// @notice This contract implements a private coin toss game between an user and a single party (the "house").
+/// @dev The contract is deployed with a bet_amount and a private oracle.
+///      The user can create a bet note with a bet (true or false) which is later settled by the private oracle.
+///      Either the house or the user, based on the result, receive the bet_amount.
 contract CoinToss {
+
+    /////////////////////////////////////////////////////////////////////
+    //                             Imports                             //
+    /////////////////////////////////////////////////////////////////////
+
     use dep::aztec::context::Context;
     use crate::types::bet_note::{BetNote, BetNoteMethods, BET_NOTE_LEN};
     use crate::types::config_note::{ConfigNote, ConfigNoteMethods, CONFIG_NOTE_LEN};
@@ -19,8 +29,7 @@ contract CoinToss {
 
     use dep::aztec::note::{
         note_getter_options::NoteGetterOptions,
-        note_header::NoteHeader,
-        note_interface::NoteInterface,
+        note_header::NoteHeader
         note_viewer_options::NoteViewerOptions,
         utils as note_utils
     };
@@ -33,14 +42,15 @@ contract CoinToss {
         rand::rand
     };
     use dep::aztec::state_vars::{
-        public_state::PublicState,
-        map::Map,
         set::Set,
         immutable_singleton::ImmutableSingleton
     };
     use dep::aztec::selector::compute_selector;
     use dep::aztec::types::address::AztecAddress;
 
+    /////////////////////////////////////////////////////////////////////
+    //                             Storage                             //
+    /////////////////////////////////////////////////////////////////////
 
     global CONFIG_NOTE_SLOT = 1;
     global BETS_SLOT = 2;
@@ -67,14 +77,34 @@ contract CoinToss {
         }
     }
 
-    // Constructs the contract.
+    /////////////////////////////////////////////////////////////////////
+    //                           Constructor                           //
+    /////////////////////////////////////////////////////////////////////
+
+    /// @notice         Constructor for the contract, setting the config note
+    /// @custom:privacy private
+    /// @param          divinity The divinity address, invoked by the oracle
+    /// @param          private_oracle The private oracle contract address
+    /// @param          house The house address (ie the other party in every bet)
+    /// @param          token The token used to bet
+    /// @param          bet_amount The bet amount
     #[aztec(private)]
     fn constructor(divinity: AztecAddress, private_oracle: AztecAddress, house: AztecAddress, token: AztecAddress, bet_amount: Field) {
         let mut config_note = ConfigNote::new(divinity, private_oracle, house, token, bet_amount);
         storage.config.initialize(&mut config_note, Option::none(), false);
     }
 
-    // House shares off-chain with the user the preimage for an escrow note for the bet_amount and an authwit to consume it
+    /////////////////////////////////////////////////////////////////////
+    //                   Private external functions                    //
+    /////////////////////////////////////////////////////////////////////
+
+    /// @notice         Creates a bet
+    /// @custom:privacy private
+    /// @dev            House shares off-chain with the user the preimage for an escrow note for the bet_amount and an authwit to consume it
+    /// @param          bet The bet outcome (true or false)
+    /// @param          user_transfer_nonce The nonce used for transferring the bet amount from the user to the contract
+    /// @param          house_escrow The house escrow 
+    /// @param          settle_escrow_nonce The settle escrow nonce
     #[aztec(private)]
     fn create_bet(bet: bool, user_transfer_nonce: Field, house_escrow: Field, settle_escrow_nonce: Field) {
         let sender = AztecAddress::new(context.msg_sender());
@@ -122,11 +152,17 @@ contract CoinToss {
         );
     }
 
-    // Callback triggered on submit_answer in the oracle (add the result to both the user and the house).
-    // data[0]: user address
-    // data[1]: bet_id (the randomness generated when creating the bet note)
-    // data[2]: house address
-    // data[2:5]: unused
+    /// @notice         Callback from the oracle, creating the result note
+
+    /// @dev            This callback is triggered on private_oracle::submit_answer, from the oracle (add the result to both the user and the house).
+    ///                 The result note is created with the following data, coming from the callback:
+    ///                 data[0]: user address
+    ///                 data[1]: bet_id (the randomness generated when creating the bet note)
+    ///                 data[2]: house address
+    ///                 data[2:5]: unused
+    /// @custom:privacy private
+    /// @param          answer The bet result (true or false) from the oracle
+    /// @param          data The data from the callback, used to create the note
     #[aztec(private)]
     fn oracle_callback(answer: Field, data: [Field; 5]) {
         let sender = AztecAddress::new(context.msg_sender());
@@ -138,6 +174,12 @@ contract CoinToss {
         storage.results.insert(&mut result_note_house, true);
     }
 
+
+    /// @notice         Settles a bet (send the token to the winner and remove it from the active bets)
+    /// @custom:privacy private
+    /// @dev            The bet is settled by the oracle (which ask the divinity), which sends the result to the contract in the oracle callback
+    ///                 The contract then checks the result and sends the bet amount to the winner.
+    /// @param          bet_id The bet id to settle
     #[aztec(private)]
     fn settle_bet(bet_id: Field) {
         let config_note = storage.config.get_note();
@@ -182,6 +224,17 @@ contract CoinToss {
         }
     }
 
+    /////////////////////////////////////////////////////////////////////
+    //                   Private internal functions                    //
+    /////////////////////////////////////////////////////////////////////
+
+    /// @notice         Internal function to create an escrowed token amount for a bet
+    /// @dev            This function consumes the escrow from the house, creates a combined escrow with both amounts, and shares it with the user and the house.
+    /// @custom:privacy internal
+    /// @param          sender The address of the sender
+    /// @param          house_escrow The house escrow 
+    /// @param          settle_escrow_nonce The settle escrow nonce
+    /// @return         The randomness used by the escrow
     #[aztec(private)]
     #[internal]
     fn _create_bet_escrow(
@@ -227,22 +280,44 @@ contract CoinToss {
         escrow_randomness
     }
 
-    // Returns the divinity address
+    /////////////////////////////////////////////////////////////////////
+    //             Public unconstrained external functions             //
+    /////////////////////////////////////////////////////////////////////
+
+    /// @notice         Gets the config note
+    /// @custom:privacy unconstrained
+    /// @return         The config note (divinity, private oracle, house, token, bet_amount)
     unconstrained fn get_config_unconstrained() -> ConfigNote {
         storage.config.view_note()
     }
 
+    /// @notice         Gets the bet notes for an user
+    /// @custom:privacy unconstrained
+    /// @param          user The user address
+    /// @param          start_offset The offset to start from
+    /// @return         The bet notes for the user (padded with empty notes, up to 10)
     unconstrained fn get_user_bets_unconstrained(user: AztecAddress, start_offset: u32) -> [Option<BetNote>; 10] {
         let user_bets_getter_option = NoteViewerOptions::new().select(0, user.address).set_offset(start_offset);
         storage.bets.view_notes(user_bets_getter_option)
     }
 
+    /// @notice         Gets the result notes for an user
+    /// @custom:privacy unconstrained
+    /// @param          owner The owner address
+    /// @param          start_offset The offset to start from
+    /// @return         The result notes for the user (padded with empty notes, up to 10)
     unconstrained fn get_results_unconstrained(owner: AztecAddress, start_offset: u32) -> [Option<ResultNote>; 10] {
         let results_getter_option = NoteViewerOptions::new().select(0, owner.address).set_offset(start_offset);
         storage.results.view_notes(results_getter_option)
     }
 
-    // Computes note hash and nullifier.
+    /// @notice         Compute the note hash and nullifier for a note
+    /// @custom:privacy unconstrained
+    /// @param          contract_address The contract address (this)
+    /// @param          nonce The nonce
+    /// @param          storage_slot The storage slot of the note
+    /// @param          preimage The preimage of the note
+    /// @return         The note hash and nullifier
     unconstrained fn compute_note_hash_and_nullifier(contract_address: Field, nonce: Field, storage_slot: Field, preimage: [Field; CONFIG_NOTE_LEN]) -> [Field; 4] {
         let note_header = NoteHeader::new(contract_address, nonce, storage_slot);
 
