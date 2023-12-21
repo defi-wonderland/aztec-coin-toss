@@ -24,7 +24,7 @@ use dep::aztec::{
 
 /// @notice A note that represents a given bet, of a given user
 /// @member owner The owner of the note
-/// @member bet_id The id of the bet (randomlty generated)
+/// @member bet_id The id of the bet (the escrow randomness is reused for this)
 /// @member bet The bet outcome given by the user (true or false)
 /// @member header The note header
 struct BetNote {
@@ -37,16 +37,15 @@ struct BetNote {
 global BET_NOTE_LEN: Field = 3;
 
 impl BetNote {
-
     /////////////////////////////////////////////////////////////////////
     //                         Public methods                          //
     /////////////////////////////////////////////////////////////////////
 
     /// @notice Bet note constructor
     /// @param _owner The owner of the note
+    /// @param _bet_id The id of the bet (randomlty generated, by reusing the escrow randomness)
     /// @param _bet The bet outcome given by the user (true or false, representing head or tail)
-    /// @param _bet_id The id of the bet (randomlty generated)
-    pub fn new(_owner: AztecAddress, _bet: bool, _bet_id: Field) -> Self {
+    pub fn new(_owner: AztecAddress, _bet_id: Field, _bet: bool) -> Self {
         BetNote {
             owner: _owner,
             bet_id: _bet_id,

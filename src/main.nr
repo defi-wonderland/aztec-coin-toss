@@ -1,6 +1,5 @@
 mod types;
 
-
 /// @notice This contract implements a private coin toss game between an user and a single party (the "house").
 /// @dev The contract is deployed with a bet_amount and a private oracle.
 ///      The user can create a bet note with a bet (true or false) which is later settled by the private oracle.
@@ -49,7 +48,7 @@ contract CoinToss {
     };
 
     use dep::std::option::Option;
-    
+
     /////////////////////////////////////////////////////////////////////
     //                             Storage                             //
     /////////////////////////////////////////////////////////////////////
@@ -58,7 +57,9 @@ contract CoinToss {
     global BETS_SLOT = 2;
     global RESULT_SLOT = 3;
 
-    // TODO: add slow update tree to make the switch from private to public
+    /// @member config The config note, containing the divinity address, the private oracle address, the house address, the token address and the bet amount
+    /// @member bets The set of bet notes (ie active bets)
+    /// @member results The set of result notes (ie settled bets)
     struct Storage {
         config: ImmutableSingleton<ConfigNote, CONFIG_NOTE_LEN>,
         bets: Set<BetNote, BET_NOTE_LEN>,
@@ -114,10 +115,9 @@ contract CoinToss {
         let house = config_note.house;
         let bet_amount = config_note.bet_amount;
         let address_this = AztecAddress::new(context.this_address());
-
         let token_contract = TokenPrivateContextInterface::at(config_note.token.address);
 
-        // We transfer private tokens from the user to the coin toss 
+        // We transfer private tokens from the user to the coin toss contract (this)
         let _ = token_contract.transfer(
             &mut context,
             FromTransferStruct { address: sender.address },
@@ -134,6 +134,7 @@ contract CoinToss {
 
         assert(house_escrow_note == bet_amount, "Invalid escrow amount");
 
+        // Create a new escrow between the user and the house
         let emit_escrow_selector = compute_selector("_create_bet_escrow((Field),Field,Field)");
         
         let escrow_randomness = context.call_private_function(
@@ -141,27 +142,27 @@ contract CoinToss {
             emit_escrow_selector,
             [sender.address, house_escrow, settle_escrow_nonce])[0];
         
-
-        let mut user_bet: BetNote = BetNote::new(sender, bet, escrow_randomness);
+        // Create the bet note and send it to both user and house. Use the escrow randomness as bet_id
+        let mut user_bet: BetNote = BetNote::new(sender, escrow_randomness, bet);
         storage.bets.insert(&mut user_bet, true);
 
         emit_encrypted_log(
             &mut context,
             address_this.address,
             BETS_SLOT,
-            get_public_key(config_note.house.address),
+            get_public_key(house.address),
             user_bet.serialize(),
         );
     }
 
     /// @notice         Callback from the oracle, creating the result note
-
     /// @dev            This callback is triggered on private_oracle::submit_answer, from the oracle (add the result to both the user and the house).
     ///                 The result note is created with the following data, coming from the callback:
     ///                 data[0]: user address
-    ///                 data[1]: bet_id (the randomness generated when creating the bet note)
+    ///                 data[1]: bet_id (the randomness generated when creating the escrow)
     ///                 data[2]: house address
     ///                 data[2:5]: unused
+    ///                 This callback can be called by any address, but the caller is part of the result note (and constrained when settling the bet)
     /// @custom:privacy private
     /// @param          answer The bet result (true or false) from the oracle
     /// @param          data The data from the callback, used to create the note
@@ -169,13 +170,16 @@ contract CoinToss {
     fn oracle_callback(answer: Field, data: [Field; 5]) {
         let sender = AztecAddress::new(context.msg_sender());
 
+        // Note with owner := user
         let mut result_note_user = ResultNote::new(AztecAddress::new(data[0]), sender, data[1], answer as bool);
+
+        // Note with owner := house
         let mut result_note_house = ResultNote::new(AztecAddress::new(data[2]), sender, data[1], answer as bool);
 
+        // Commmit and emit both result notes
         storage.results.insert(&mut result_note_user, true);
         storage.results.insert(&mut result_note_house, true);
     }
-
 
     /// @notice         Settles a bet (send the token to the winner and remove it from the active bets)
     /// @custom:privacy private
@@ -189,18 +193,20 @@ contract CoinToss {
         let house = config_note.house;
         let token = config_note.token;
         let oracle = config_note.private_oracle;
-        
+
         let address_this = AztecAddress::new(context.this_address());
-        
+
         let bets = storage.bets;
 
+        // Get the bet note, filtered by bet_id
         let options = NoteGetterOptions::new().select(1, bet_id).set_limit(1);
         let bet_notes = bets.get_notes(options);
         
+        // Check if the bet exists
         if(bet_notes[0].is_some()) {
             let note = bet_notes[0].unwrap_unchecked();
 
-            // Filter by bet_id and result sender (which must be the oracle)
+            // Filter by bet_id and result sender, only keep the results sent by the oracle
             let result_getter_option = NoteGetterOptions::new().select(2, bet_id).select(1, oracle.address).set_limit(1);
             let result_note = storage.results.get_notes(result_getter_option)[0];
 
@@ -236,7 +242,7 @@ contract CoinToss {
     /// @param          sender The address of the sender
     /// @param          house_escrow The house escrow 
     /// @param          settle_escrow_nonce The settle escrow nonce
-    /// @return         The randomness used by the escrow
+    /// @return         The escrow randomness, used as bet_id too
     #[aztec(private)]
     #[internal]
     fn _create_bet_escrow(
