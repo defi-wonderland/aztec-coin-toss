@@ -2,26 +2,27 @@ import {
   AccountWalletWithPrivateKey,
   AztecAddress,
   BatchCall,
+  computeAuthWitMessageHash,
+  computeMessageSecretHash,
   ContractFunctionInteraction,
+  createAccount,
+  createPXEClient,
   ExtendedNote,
   Fr,
+  getSandboxAccountsWallets,
   Note,
   PXE,
   TxHash,
-  computeAuthWitMessageHash,
-  computeMessageSecretHash,
-  createAccount,
-  createPXEClient,
-  getSandboxAccountsWallets,
   waitForSandbox,
 } from "@aztec/aztec.js";
 
+import { initAztecJs } from "@aztec/aztec.js/init";
+
+import { BetNote, ResultNote } from "./Notes.js";
 import { CoinTossContract } from "../artifacts/CoinToss.js";
 import { TokenContract } from "../artifacts/token/Token.js";
 
-import { initAztecJs } from "@aztec/aztec.js/init";
-import { BetNote, ResultNote } from "./Notes.js";
-
+// Constants
 const CONFIG_SLOT: Fr = new Fr(1);
 const BETS_SLOT: Fr = new Fr(2);
 const RESULT_SLOT: Fr = new Fr(3);
@@ -31,6 +32,7 @@ const MINT_TOKENS = 100000n;
 const PRIVATE_ORACLE_ADDRESS = AztecAddress.fromBigInt(456n);
 const BET_AMOUNT = 1337n;
 
+// Global variables
 let pxe: PXE;
 let coinToss: CoinTossContract;
 let token: TokenContract;
@@ -41,7 +43,7 @@ let divinity: AccountWalletWithPrivateKey;
 let deployer: AccountWalletWithPrivateKey;
 let mock_oracle: AccountWalletWithPrivateKey;
 
-// Setup: Set the sandbox
+// Setup: Set the sandbox up and get the accounts
 beforeAll(async () => {
   const { SANDBOX_URL = "http://localhost:8080" } = process.env;
   pxe = createPXEClient(SANDBOX_URL);
@@ -61,6 +63,7 @@ describe("E2E Coin Toss", () => {
   let betIdUser: bigint;
   let betIdHouse: bigint;
 
+  // Setup: Deploy the contracts and mint tokens, ready for escrow
   beforeAll(async () => {
     USER_BET_NOTES = createUserBetNotes(4);
     FIRST_BET_NOTE = USER_BET_NOTES[0];
@@ -103,6 +106,7 @@ describe("E2E Coin Toss", () => {
     await createEscrows(4);
   }, 120_000);
 
+  // Test: create_bet(..) flows, check if the bet is created correctly, with correct amounts transferred in escrow
   describe("create_bet(..)", () => {
     describe("errors", () => {
       it("Reverts if the escrow provided by the house is lower than the bet amount", async () => {
@@ -162,6 +166,7 @@ describe("E2E Coin Toss", () => {
       });
     });
 
+    // Happy path:
     it("Tx to create_bet is mined", async () => {
       // House creates the escrow and shares with the user
       const { randomness: escrowRandomness, authNonce: settleEscrowNonce } = (
@@ -265,6 +270,7 @@ describe("E2E Coin Toss", () => {
     });
   });
 
+  // Test: oracle_callback(..) flows, check if the result note is created correctly
   describe("oracle_callback(..)", () => {
     let callback_data: bigint[];
 
@@ -368,6 +374,7 @@ describe("E2E Coin Toss", () => {
     });
   });
 
+  // Test: settle_bet(..) flows, check if the bet note is nullified, the amount is transferred to the correct party, and the escrow note is nullified
   describe("settle_bet()", () => {
     let houseBalance: bigint;
     let betId: bigint;
@@ -479,6 +486,7 @@ describe("E2E Coin Toss", () => {
     });
   });
 
+  // Test: get_user_bets_unconstrained(..), check if the correct bets are returned
   describe("get_user_bets_unconstrained", () => {
     let SLICED_USER_BET_NOTES: BetNote[];
 
@@ -571,6 +579,7 @@ describe("E2E Coin Toss", () => {
     });
   });
 
+  // Test: get_results_unconstrained(..), check if the correct config is returned
   describe("get_config_unconstrained", () => {
     it("returns the correct parameters for all configs", async () => {
       type AddressObj = {
@@ -598,6 +607,7 @@ describe("E2E Coin Toss", () => {
   });
 });
 
+// Create an array of mock bet notes
 function createUserBetNotes(number: number = 3): BetNote[] {
   let betNote: BetNote;
   let betNotes: BetNote[] = [];
@@ -614,6 +624,7 @@ function createUserBetNotes(number: number = 3): BetNote[] {
   return betNotes;
 }
 
+// Batch send bets
 const sendBetBatch = async (
   bets: {
     betNote: BetNote;
@@ -645,6 +656,7 @@ const sendBetBatch = async (
   await batchBets.send().wait();
 };
 
+// Add the config notes to the PXE
 const addConfigNotesToPxe = async (
   user: AztecAddress,
   contract: AztecAddress,
@@ -673,6 +685,7 @@ const addConfigNotesToPxe = async (
   );
 };
 
+// Add the pending shield note to the PXE
 const addPendingShieldNoteToPXE = async (
   account: AccountWalletWithPrivateKey,
   amount: bigint,
@@ -692,6 +705,7 @@ const addPendingShieldNoteToPXE = async (
   );
 };
 
+// Mint tokens for an account
 const mintTokenFor = async (
   account: AccountWalletWithPrivateKey,
   minter: AccountWalletWithPrivateKey,
@@ -716,6 +730,7 @@ const mintTokenFor = async (
     .wait();
 };
 
+// Create an escrow with a specific amount
 const createEscrowWithAmount = async (amount: bigint) => {
   await token
     .withWallet(house)
@@ -745,7 +760,7 @@ const createEscrowWithAmount = async (amount: bigint) => {
   return { escrowRandom, settleEscrowNonce };
 };
 
-// Max is 4
+// Create multiple escrows (up to 4, limit of the batch call)
 const createEscrows = async (amount: number = 4) => {
   const escrowAction = token.methods
     .escrow(house.getAddress(), house.getAddress(), BET_AMOUNT, 0)
@@ -759,6 +774,7 @@ const createEscrows = async (amount: number = 4) => {
   await batchEscrows.send().wait();
 };
 
+// Get the escrow and auth nonce for the house
 const getHouseEscrowAndAuthNonce = async (amount: number = 1) => {
   // Get the escrow
   const escrowsArray = await token
@@ -793,13 +809,14 @@ const getHouseEscrowAndAuthNonce = async (amount: number = 1) => {
   }));
 };
 
+// Create an authWitness for a specific action
 const createAuth = async (
   action: ContractFunctionInteraction,
   approver: AccountWalletWithPrivateKey,
   caller: AztecAddress
 ) => {
   // We need to compute the message we want to sign and add it to the wallet as approved
-  const messageHash = await computeAuthWitMessageHash(caller, action.request());
+  const messageHash = computeAuthWitMessageHash(caller, action.request());
 
   // Both wallets are connected to same node and PXE so we could just insert directly using
   // await wallet.signAndAddAuthWitness(messageHash, );

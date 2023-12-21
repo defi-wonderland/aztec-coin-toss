@@ -1,15 +1,27 @@
+/////////////////////////////////////////////////////////////////////
+//                             Imports                             //
+/////////////////////////////////////////////////////////////////////
+
 use dep::aztec::{
+    context::PrivateContext,
     note::{
         note_header::NoteHeader,
         note_interface::NoteInterface,
     },
-
-    context::PrivateContext,
-    types::{
-        address::AztecAddress
-    }
+    types::address::AztecAddress
 };
 
+/////////////////////////////////////////////////////////////////////
+//                              Class                              //
+/////////////////////////////////////////////////////////////////////
+
+/// @notice a note containing the (immutable) game configuration
+/// @member divinity the address of the divinity used by the oracle
+/// @member private_oracle the address of the private oracle contract
+/// @member house the address of the house, taking the other side of every bet
+/// @member token the address of the token used for betting
+/// @member bet_amount the amount of tokens to bet
+/// @member header the note header
 struct ConfigNote {
     divinity: AztecAddress,
     private_oracle: AztecAddress,
@@ -22,6 +34,17 @@ struct ConfigNote {
 global CONFIG_NOTE_LEN: Field = 5;
 
 impl ConfigNote {
+    
+    /////////////////////////////////////////////////////////////////////
+    //                         Public methods                          //
+    /////////////////////////////////////////////////////////////////////
+
+    /// @notice create a new config note
+    /// @param _divinity the address of the divinity used by the oracle
+    /// @param _private_oracle the address of the private oracle contract
+    /// @param _house the address of the house, taking the other side of every bet
+    /// @param _token the address of the token used for betting
+    /// @param _amount the amount of tokens to bet
     pub fn new(_divinity: AztecAddress, _private_oracle: AztecAddress, _house: AztecAddress, _token: AztecAddress, _amount: Field) -> Self {
         ConfigNote {
             divinity: _divinity,
@@ -33,10 +56,16 @@ impl ConfigNote {
         }
     }
 
+    /////////////////////////////////////////////////////////////////////
+    //                        Internal methods                         //
+    /////////////////////////////////////////////////////////////////////
+
+    /// @notice serialize the note
     fn serialize(self) -> [Field; CONFIG_NOTE_LEN] {
         [self.divinity.address, self.private_oracle.address, self.house.address, self.token.address, self.bet_amount]
     }
 
+    /// @notice deserialize the note
     fn deserialize(preimage: [Field; CONFIG_NOTE_LEN]) -> Self {
         ConfigNote {
             divinity: AztecAddress::new(preimage[0]),
@@ -48,6 +77,7 @@ impl ConfigNote {
         }
     }
 
+    /// @notice compute the note hash
     fn compute_note_hash(self) -> Field {
         dep::std::hash::pedersen_hash([
             self.divinity.address,
@@ -58,15 +88,18 @@ impl ConfigNote {
         ])
     }
 
+    /// @notice this note isn't nullifiable, returns 0
     fn compute_nullifier(self) -> Field {
          let _ = self; // Avoid compiler warning (same # acir opcodes and backend size)
          0
     }
 
+    /// @notice get the note header
     fn set_header(&mut self, header: NoteHeader) {
         self.header = header;
     }
 
+    /// @notice this notes isn't private, no owner to emit to
     fn broadcast(self, context: &mut PrivateContext, slot: Field) {
         // no owner == no broadcast
         let _ = self; // Avoid compiler warning (same # acir opcodes and backend size)
@@ -74,6 +107,10 @@ impl ConfigNote {
         let ___ = slot;
     }
 }
+
+/////////////////////////////////////////////////////////////////////
+//                         Global methods                          //
+/////////////////////////////////////////////////////////////////////
 
 fn deserialize(preimage: [Field; CONFIG_NOTE_LEN]) -> ConfigNote {
     ConfigNote::deserialize(preimage)
