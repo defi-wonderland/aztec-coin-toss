@@ -6,6 +6,12 @@ contract CoinToss {
     use crate::types::config_note::{ConfigNote, ConfigNoteMethods, CONFIG_NOTE_LEN};
     use crate::types::result_note::{ResultNote, ResultNoteMethods, RESULT_NOTE_LEN};
  
+    use crate::types::oracle::{
+        PrivateOraclePrivateContextInterface, 
+        FromSubmitQuestionStruct, 
+        DivinityAddressSubmitQuestionStruct, 
+    };
+    
     use crate::types::token::{
         TokenPrivateContextInterface, 
         FromTransferStruct, 
@@ -46,7 +52,6 @@ contract CoinToss {
     global BETS_SLOT = 2;
     global RESULT_SLOT = 3;
 
-    // TODO: add slow update tree to make the switch from private to public
     struct Storage {
         config: ImmutableSingleton<ConfigNote, CONFIG_NOTE_LEN>,
         bets: Set<BetNote, BET_NOTE_LEN>,
@@ -76,13 +81,16 @@ contract CoinToss {
 
     // House shares off-chain with the user the preimage for an escrow note for the bet_amount and an authwit to consume it
     #[aztec(private)]
-    fn create_bet(bet: bool, user_transfer_nonce: Field, house_escrow: Field, settle_escrow_nonce: Field) {
+    fn create_bet(bet: bool, user_transfer_nonce: Field, house_escrow: Field, settle_escrow_nonce: Field, unique_bet_id: Field) {
         let sender = AztecAddress::new(context.msg_sender());
         let config_note = storage.config.get_note();
         let house = config_note.house;
+        let divinity = config_note.divinity;
+        let oracle = config_note.private_oracle;
         let bet_amount = config_note.bet_amount;
         let address_this = AztecAddress::new(context.this_address());
 
+        let oracle_contract = PrivateOraclePrivateContextInterface::at(oracle.address);
         let token_contract = TokenPrivateContextInterface::at(config_note.token.address);
 
         // We transfer private tokens from the user to the coin toss 
@@ -108,9 +116,20 @@ contract CoinToss {
             address_this.address,
             emit_escrow_selector,
             [sender.address, house_escrow, settle_escrow_nonce])[0];
-        
 
-        let mut user_bet: BetNote = BetNote::new(sender, bet, escrow_randomness);
+        let callback = [address_this.address, sender.address, unique_bet_id, config_note.house.address, 0, 0];
+
+        // We submit the question to the oracle
+        let __ = oracle_contract.submit_question(
+            &mut context,
+            FromSubmitQuestionStruct { address: sender.address },
+            unique_bet_id,
+            DivinityAddressSubmitQuestionStruct { address: divinity.address },
+            unique_bet_id,
+            callback
+        );
+        
+        let mut user_bet: BetNote = BetNote::new(&mut context, sender, bet, unique_bet_id, escrow_randomness);
         storage.bets.insert(&mut user_bet, true);
 
         emit_encrypted_log(
@@ -171,7 +190,7 @@ contract CoinToss {
                 &mut context,
                 OwnerSettleEscrowStruct { address: address_this.address },
                 RecipientSettleEscrowStruct { address: receiver.address }, 
-                bet_id,
+                note.escrow_randomness,
                 0
             );
 
@@ -232,8 +251,8 @@ contract CoinToss {
         storage.config.view_note()
     }
 
-    unconstrained fn get_user_bets_unconstrained(user: AztecAddress, start_offset: u32) -> [Option<BetNote>; 10] {
-        let user_bets_getter_option = NoteViewerOptions::new().select(0, user.address).set_offset(start_offset);
+    unconstrained fn get_user_bets_unconstrained(start_offset: u32) -> [Option<BetNote>; 10] {
+        let user_bets_getter_option = NoteViewerOptions::new().set_offset(start_offset);
         storage.bets.view_notes(user_bets_getter_option)
     }
 

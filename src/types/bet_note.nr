@@ -1,3 +1,7 @@
+use dep::std::option::Option;
+use dep::protocol_types::{
+    constants::EMPTY_NULLIFIED_COMMITMENT,
+};
 use dep::aztec::{
     note::{
         note_header::NoteHeader,
@@ -21,23 +25,29 @@ struct BetNote {
     owner: AztecAddress,
     bet_id: Field,
     bet: bool, // Heads is 0 (False). Tails is 1 (True).
+    escrow_randomness: Field,
     header: NoteHeader
 }
 
-global BET_NOTE_LEN: Field = 3;
+global BET_NOTE_LEN: Field = 4;
 
 impl BetNote {
-    pub fn new(_owner: AztecAddress, _bet: bool, _bet_id: Field) -> Self {
+    pub fn new(_context: &mut PrivateContext, _owner: AztecAddress, _bet: bool, _bet_id: Field, _escrow_randomness: Field) -> Self {
+        // Nullify bet id
+        let nullifier =  dep::std::hash::pedersen_hash([_bet_id]);
+        _context.push_new_nullifier(nullifier, EMPTY_NULLIFIED_COMMITMENT);
+
         BetNote {
             owner: _owner,
             bet_id: _bet_id,
             bet: _bet,
+            escrow_randomness: _escrow_randomness,
             header: NoteHeader::empty(),
         }
     }
 
     fn serialize(self) -> [Field; BET_NOTE_LEN] {
-        [self.owner.address, self.bet_id, self.bet as Field]
+        [self.owner.address, self.bet_id, self.bet as Field, self.escrow_randomness]
     }
 
     fn deserialize(preimage: [Field; BET_NOTE_LEN]) -> Self {
@@ -45,6 +55,7 @@ impl BetNote {
             owner: AztecAddress::new(preimage[0]),
             bet_id: preimage[1],
             bet: preimage[2] as bool,
+            escrow_randomness: preimage[3],
             header: NoteHeader::empty(),
         }
     }
@@ -53,7 +64,8 @@ impl BetNote {
         dep::std::hash::pedersen_hash([
             self.owner.address,
             self.bet_id,
-            self.bet as Field
+            self.bet as Field,
+            self.escrow_randomness
         ])
     }
 
