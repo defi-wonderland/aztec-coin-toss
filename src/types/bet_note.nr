@@ -1,4 +1,10 @@
+/////////////////////////////////////////////////////////////////////
+//                             Imports                             //
+/////////////////////////////////////////////////////////////////////
+
 use dep::aztec::{
+    context::PrivateContext,
+    log::emit_encrypted_log,
     note::{
         note_header::NoteHeader,
         note_interface::NoteInterface,
@@ -6,27 +12,40 @@ use dep::aztec::{
     },
     oracle::{
         rand::rand,
+        get_public_key::get_public_key,
         get_secret_key::get_secret_key,
-        get_public_key::get_public_key
     },
-
-    log::emit_encrypted_log,
-    context::PrivateContext,
-    types::{
-        address::AztecAddress,
-    }
+    types::address::AztecAddress
 };
 
+/////////////////////////////////////////////////////////////////////
+//                              Class                              //
+/////////////////////////////////////////////////////////////////////
+
+/// @notice A note that represents a given bet, of a given user
+/// @member owner The owner of the note
+/// @member bet_id The id of the bet (randomlty generated)
+/// @member bet The bet outcome given by the user (true or false)
+/// @member header The note header
 struct BetNote {
     owner: AztecAddress,
     bet_id: Field,
-    bet: bool, // Heads is 0 (False). Tails is 1 (True).
+    bet: bool,
     header: NoteHeader
 }
 
 global BET_NOTE_LEN: Field = 3;
 
 impl BetNote {
+
+    /////////////////////////////////////////////////////////////////////
+    //                         Public methods                          //
+    /////////////////////////////////////////////////////////////////////
+
+    /// @notice Bet note constructor
+    /// @param _owner The owner of the note
+    /// @param _bet The bet outcome given by the user (true or false, representing head or tail)
+    /// @param _bet_id The id of the bet (randomlty generated)
     pub fn new(_owner: AztecAddress, _bet: bool, _bet_id: Field) -> Self {
         BetNote {
             owner: _owner,
@@ -36,10 +55,16 @@ impl BetNote {
         }
     }
 
+    /////////////////////////////////////////////////////////////////////
+    //                        Internal methods                         //
+    /////////////////////////////////////////////////////////////////////
+
+    /// @notice Serializes the note
     fn serialize(self) -> [Field; BET_NOTE_LEN] {
         [self.owner.address, self.bet_id, self.bet as Field]
     }
 
+    /// @notice Deserializes the note
     fn deserialize(preimage: [Field; BET_NOTE_LEN]) -> Self {
         BetNote {
             owner: AztecAddress::new(preimage[0]),
@@ -49,6 +74,7 @@ impl BetNote {
         }
     }
 
+    /// @notice Computes the note hash of the note
     fn compute_note_hash(self) -> Field {
         dep::std::hash::pedersen_hash([
             self.owner.address,
@@ -57,6 +83,8 @@ impl BetNote {
         ])
     }
 
+    /// @notice Computes the nullifier of the note
+    /// @dev    This is a pretty standard nullifier computation, using the bet_id as the key
     fn compute_nullifier(self) -> Field {
         let note_hash_for_nullify = compute_note_hash_for_read_or_nullify(BetNoteMethods, self);
         let nullifier_key = self.bet_id;
@@ -67,10 +95,12 @@ impl BetNote {
         ])
     }
 
+    /// @notice Sets the note header
     fn set_header(&mut self, header: NoteHeader) {
         self.header = header;
     }
 
+    /// @notice Emit the note creation event using the owner public key
     fn broadcast(self, context: &mut PrivateContext, slot: Field) {
         let encryption_pub_key = get_public_key(self.owner.address);
         emit_encrypted_log(
@@ -82,6 +112,10 @@ impl BetNote {
         );
     }
 }
+
+/////////////////////////////////////////////////////////////////////
+//                         Global methods                          //
+/////////////////////////////////////////////////////////////////////
 
 fn deserialize(preimage: [Field; BET_NOTE_LEN]) -> BetNote {
     BetNote::deserialize(preimage)
