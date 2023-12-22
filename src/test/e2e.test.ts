@@ -25,8 +25,6 @@ import { PrivateOracleContract } from "../artifacts/oracle/PrivateOracle.js";
 
 // Constants
 const CONFIG_SLOT: Fr = new Fr(1);
-const BETS_SLOT: Fr = new Fr(2);
-const RESULT_SLOT: Fr = new Fr(3);
 
 // Oracle storage layout
 const TOKEN_SLOT: Fr = new Fr(1);
@@ -47,14 +45,13 @@ let user: AccountWalletWithPrivateKey;
 let house: AccountWalletWithPrivateKey;
 let divinity: AccountWalletWithPrivateKey;
 let deployer: AccountWalletWithPrivateKey;
-let mock_oracle: AccountWalletWithPrivateKey;
 
 // Setup: Set the sandbox up and get the accounts
 beforeAll(async () => {
   const { SANDBOX_URL = "http://localhost:8080" } = process.env;
   pxe = createPXEClient(SANDBOX_URL);
 
-  [, [user, house, divinity], deployer, mock_oracle] = await Promise.all([
+  [, [user, house, divinity], deployer] = await Promise.all([
     waitForSandbox(pxe),
     getSandboxAccountsWallets(pxe),
     createAccount(pxe),
@@ -75,12 +72,7 @@ describe("E2E Coin Toss", () => {
   beforeAll(async () => {
     USER_BET_NOTES = createUserBetNotes(4);
 
-    const modifiedFirstBetNote = {
-      ...USER_BET_NOTES[0],
-      bet_id: Fr.random().toBigInt()
-    }
-
-    FIRST_BET_NOTE = modifiedFirstBetNote;
+    FIRST_BET_NOTE = USER_BET_NOTES[0];
 
     // Deploy the token with the  house as a minter
     token = await TokenContract.deploy(deployer, house.getAddress())
@@ -132,6 +124,8 @@ describe("E2E Coin Toss", () => {
 
   // Test: create_bet(..) flows, check if the bet is created correctly, with correct amounts transferred in escrow
   describe("create_bet(..)", () => {
+    let expectedCallback: bigint[] = [];
+
     describe("errors", () => {
       it("Reverts if the escrow provided by the house is lower than the bet amount", async () => {
         const { escrowRandom, settleEscrowNonce } =
@@ -269,7 +263,7 @@ describe("E2E Coin Toss", () => {
           .view({ from: user.getAddress() })
       ).find((noteObj: any) => noteObj._is_some)._value;
 
-      const expectedCallback = [coinToss.address.toBigInt(), user.getAddress().toBigInt(), FIRST_BET_NOTE.bet_id, house.getAddress().toBigInt(), 0n, 0n]
+      expectedCallback = [coinToss.address.toBigInt(), user.getAddress().toBigInt(), FIRST_BET_NOTE.bet_id, house.getAddress().toBigInt(), 0n, 0n]
 
       expect(questionNote.request).toBe(FIRST_BET_NOTE.bet_id);
       expect(questionNote.requester_address.address).toBe(user.getAddress().toBigInt());
@@ -284,8 +278,6 @@ describe("E2E Coin Toss", () => {
           .methods.get_questions_unconstrained(user.getAddress(), 0)
           .view({ from: house.getAddress() })
       ).find((noteObj: any) => noteObj._is_some)._value;
-
-      const expectedCallback = [coinToss.address.toBigInt(), user.getAddress().toBigInt(), FIRST_BET_NOTE.bet_id, house.getAddress().toBigInt(), 0n, 0n]
 
       expect(questionNote.request).toBe(FIRST_BET_NOTE.bet_id);
       expect(questionNote.requester_address.address).toBe(user.getAddress().toBigInt());
@@ -555,7 +547,7 @@ function createUserBetNotes(number: number = 3): BetNote[] {
   for (let i = 0; i < number; i++) {
     betNote = new BetNote({
       owner: user.getAddress(),
-      bet_id: Fr.random(),
+      bet_id: Fr.random().toBigInt(),
       bet: !!(i % 2), // 0: Heads, 1: Tails
     });
 
