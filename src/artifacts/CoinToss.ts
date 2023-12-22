@@ -85,8 +85,8 @@ export class CoinTossContract extends ContractBase {
     /** compute_note_hash_and_nullifier(contract_address: field, nonce: field, storage_slot: field, preimage: array) */
     compute_note_hash_and_nullifier: ((contract_address: FieldLike, nonce: FieldLike, storage_slot: FieldLike, preimage: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** create_bet(bet: boolean, user_transfer_nonce: field, house_escrow: field, settle_escrow_nonce: field) */
-    create_bet: ((bet: boolean, user_transfer_nonce: FieldLike, house_escrow: FieldLike, settle_escrow_nonce: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** create_bet(bet: boolean, user_transfer_nonce: field, house_escrow: field, settle_escrow_nonce: field, unique_bet_id: field) */
+    create_bet: ((bet: boolean, user_transfer_nonce: FieldLike, house_escrow: FieldLike, settle_escrow_nonce: FieldLike, unique_bet_id: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** get_config_unconstrained() */
     get_config_unconstrained: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
@@ -94,8 +94,11 @@ export class CoinTossContract extends ContractBase {
     /** get_results_unconstrained(owner: struct, start_offset: integer) */
     get_results_unconstrained: ((owner: AztecAddressLike, start_offset: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** get_user_bets_unconstrained(user: struct, start_offset: integer) */
-    get_user_bets_unconstrained: ((user: AztecAddressLike, start_offset: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** get_user_bets_unconstrained(start_offset: integer) */
+    get_user_bets_unconstrained: ((start_offset: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** is_id_nullified(bet_id: field) */
+    is_id_nullified: ((bet_id: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** oracle_callback(answer: field, data: array) */
     oracle_callback: ((answer: FieldLike, data: FieldLike[]) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;

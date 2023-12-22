@@ -11,12 +11,21 @@ use dep::aztec::{
         utils::compute_note_hash_for_read_or_nullify,
     },
     oracle::{
-        rand::rand,
         get_public_key::get_public_key,
         get_secret_key::get_secret_key,
+        notes::check_nullifier_exists,
+        notes::check_nullifier_exists_oracle,
+        rand::rand,
     },
     types::address::AztecAddress
 };
+
+use dep::protocol_types::{
+    constants::EMPTY_NULLIFIED_COMMITMENT,
+};
+
+use dep::std::option::Option;
+
 
 /////////////////////////////////////////////////////////////////////
 //                              Class                              //
@@ -30,11 +39,12 @@ use dep::aztec::{
 struct BetNote {
     owner: AztecAddress,
     bet_id: Field,
-    bet: bool,
+    bet: bool, // Heads is 0 (False). Tails is 1 (True).
+    escrow_randomness: Field,
     header: NoteHeader
 }
 
-global BET_NOTE_LEN: Field = 3;
+global BET_NOTE_LEN: Field = 4;
 
 impl BetNote {
     /////////////////////////////////////////////////////////////////////
@@ -42,16 +52,37 @@ impl BetNote {
     /////////////////////////////////////////////////////////////////////
 
     /// @notice Bet note constructor
+    /// @param _context The currenct context, used to push the bet_id nullifier in order to ensure uniqueness
     /// @param _owner The owner of the note
-    /// @param _bet_id The id of the bet (randomlty generated, by reusing the escrow randomness)
+    /// @param _bet_id The id of the bet (randomly generated, by reusing the escrow randomness)
     /// @param _bet The bet outcome given by the user (true or false, representing head or tail)
-    pub fn new(_owner: AztecAddress, _bet_id: Field, _bet: bool) -> Self {
+    pub fn new(_context: &mut PrivateContext, _owner: AztecAddress, _bet: bool, _bet_id: Field, _escrow_randomness: Field) -> Self {
+        // Nullify bet id
+        let compute_initialization_nullifier = BetNote::generate_bet_id_nullifier;
+        let nullifier = compute_initialization_nullifier(_bet_id);
+        _context.push_new_nullifier(nullifier, EMPTY_NULLIFIED_COMMITMENT);
+
         BetNote {
             owner: _owner,
             bet_id: _bet_id,
             bet: _bet,
+            escrow_randomness: _escrow_randomness,
             header: NoteHeader::empty(),
         }
+    }
+
+    /// @notice Bet note bet_id nullifying generator
+    /// @param _bet_id The id of the bet to nullify
+    pub fn generate_bet_id_nullifier(_bet_id: Field) -> Field {
+        dep::std::hash::pedersen_hash([_bet_id])
+    }
+
+    /// @notice Bet note bet_id initialization checker. Checks whether the bet_id was added to the nullifying tree
+    /// @param _bet_id The id of the bet to check for nullification status
+    unconstrained pub fn is_id_nullified(_bet_id: Field) -> bool {
+        let compute_initialization_nullifier = BetNote::generate_bet_id_nullifier;
+        let nullifier = compute_initialization_nullifier(_bet_id);
+        check_nullifier_exists(nullifier)
     }
 
     /////////////////////////////////////////////////////////////////////
@@ -60,7 +91,7 @@ impl BetNote {
 
     /// @notice Serializes the note
     fn serialize(self) -> [Field; BET_NOTE_LEN] {
-        [self.owner.address, self.bet_id, self.bet as Field]
+        [self.owner.address, self.bet_id, self.bet as Field, self.escrow_randomness]
     }
 
     /// @notice Deserializes the note
@@ -69,6 +100,7 @@ impl BetNote {
             owner: AztecAddress::new(preimage[0]),
             bet_id: preimage[1],
             bet: preimage[2] as bool,
+            escrow_randomness: preimage[3],
             header: NoteHeader::empty(),
         }
     }
@@ -78,7 +110,8 @@ impl BetNote {
         dep::std::hash::pedersen_hash([
             self.owner.address,
             self.bet_id,
-            self.bet as Field
+            self.bet as Field,
+            self.escrow_randomness
         ])
     }
 

@@ -10,6 +10,12 @@ contract CoinToss {
     //                             Imports                             //
     /////////////////////////////////////////////////////////////////////
 
+    use crate::types::oracle::{
+        DivinityAddressSubmitQuestionStruct, 
+        FromSubmitQuestionStruct, 
+        PrivateOraclePrivateContextInterface, 
+    };
+
     use crate::types::{
         bet_note::{BetNote, BetNoteMethods, BET_NOTE_LEN},
         config_note::{ConfigNote, ConfigNoteMethods, CONFIG_NOTE_LEN},
@@ -109,12 +115,16 @@ contract CoinToss {
     /// @param          house_escrow The house escrow 
     /// @param          settle_escrow_nonce The settle escrow nonce
     #[aztec(private)]
-    fn create_bet(bet: bool, user_transfer_nonce: Field, house_escrow: Field, settle_escrow_nonce: Field) {
+    fn create_bet(bet: bool, user_transfer_nonce: Field, house_escrow: Field, settle_escrow_nonce: Field, unique_bet_id: Field) {
         let sender = AztecAddress::new(context.msg_sender());
         let config_note = storage.config.get_note();
         let house = config_note.house;
+        let divinity = config_note.divinity;
+        let oracle = config_note.private_oracle;
         let bet_amount = config_note.bet_amount;
         let address_this = AztecAddress::new(context.this_address());
+
+        let oracle_contract = PrivateOraclePrivateContextInterface::at(oracle.address);
         let token_contract = TokenPrivateContextInterface::at(config_note.token.address);
 
         // We transfer private tokens from the user to the coin toss contract (this)
@@ -141,9 +151,20 @@ contract CoinToss {
             address_this.address,
             emit_escrow_selector,
             [sender.address, house_escrow, settle_escrow_nonce])[0];
+
+        let callback = [address_this.address, sender.address, unique_bet_id, house.address, 0, 0];
+
+        // We submit the question to the oracle
+        let __ = oracle_contract.submit_question(
+            &mut context,
+            FromSubmitQuestionStruct { address: sender.address },
+            unique_bet_id,
+            DivinityAddressSubmitQuestionStruct { address: divinity.address },
+            unique_bet_id,
+            callback
+        );
         
-        // Create the bet note and send it to both user and house. Use the escrow randomness as bet_id
-        let mut user_bet: BetNote = BetNote::new(sender, escrow_randomness, bet);
+        let mut user_bet: BetNote = BetNote::new(&mut context, sender, bet, unique_bet_id, escrow_randomness);
         storage.bets.insert(&mut user_bet, true);
 
         emit_encrypted_log(
@@ -221,7 +242,7 @@ contract CoinToss {
                 &mut context,
                 OwnerSettleEscrowStruct { address: address_this.address },
                 RecipientSettleEscrowStruct { address: receiver.address }, 
-                bet_id,
+                note.escrow_randomness,
                 0
             );
 
@@ -301,11 +322,10 @@ contract CoinToss {
 
     /// @notice         Gets the bet notes for an user
     /// @custom:privacy unconstrained
-    /// @param          user The user address
     /// @param          start_offset The offset to start from
-    /// @return         The bet notes for the user (padded with empty notes, up to 10)
-    unconstrained fn get_user_bets_unconstrained(user: AztecAddress, start_offset: u32) -> [Option<BetNote>; 10] {
-        let user_bets_getter_option = NoteViewerOptions::new().select(0, user.address).set_offset(start_offset);
+    /// @return         The bet notes (padded with empty notes, up to 10)
+    unconstrained fn get_user_bets_unconstrained(start_offset: u32) -> [Option<BetNote>; 10] {
+        let user_bets_getter_option = NoteViewerOptions::new().set_offset(start_offset);
         storage.bets.view_notes(user_bets_getter_option)
     }
 
@@ -317,6 +337,14 @@ contract CoinToss {
     unconstrained fn get_results_unconstrained(owner: AztecAddress, start_offset: u32) -> [Option<ResultNote>; 10] {
         let results_getter_option = NoteViewerOptions::new().select(0, owner.address).set_offset(start_offset);
         storage.results.view_notes(results_getter_option)
+    }
+
+    /// @notice         Gets a bet note by its id
+    /// @custom:privacy unconstrained
+    /// @param          bet_id The id of the bet
+    /// @return         A boolean indicating whether this bet_id has been initialized or not
+    unconstrained fn is_id_nullified(bet_id: Field) -> bool {
+        BetNote::is_id_nullified(bet_id)
     }
 
     /// @notice         Compute the note hash and nullifier for a note
