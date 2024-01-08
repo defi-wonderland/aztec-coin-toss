@@ -87,7 +87,7 @@ contract CoinToss {
         bets: Set<BetNote, BET_NOTE_LEN>,
         results: Set<ResultNote, RESULT_NOTE_LEN>,
         number_of_tails: Map<PublicState<Gaffine, GAFFINE_SERIALIZED_LEN>>,
-        divinity_public_key: PublicState<Field, FIELD_SERIALIZED_LEN>,
+        divinity_bjj_public_key: PublicState<Field, FIELD_SERIALIZED_LEN>,
     }
 
     impl Storage { 
@@ -111,7 +111,7 @@ contract CoinToss {
                         )
                     },
                 ),
-                divinity_public_key: PublicState::new( 
+                divinity_bjj_public_key: PublicState::new( 
                     context,
                     DIVINITY_PUBLIC_KEY_SLOT,
                     FieldSerializationMethods,
@@ -132,9 +132,17 @@ contract CoinToss {
     /// @param          token The token used to bet
     /// @param          bet_amount The bet amount
     #[aztec(private)]
-    fn constructor(divinity: AztecAddress, private_oracle: AztecAddress, house: AztecAddress, token: AztecAddress, bet_amount: Field) {
+    fn constructor(divinity: AztecAddress, divinity_bjj_public_key: Field, private_oracle: AztecAddress, house: AztecAddress, token: AztecAddress, bet_amount: Field) {
         let mut config_note = ConfigNote::new(divinity, private_oracle, house, token, bet_amount);
         storage.config.initialize(&mut config_note, Option::none(), false);
+
+        let selector = compute_selector("set_divinity_bjj_public_key(Field)");
+        context.call_public_function(context.this_address(), selector, [divinity_bjj_public_key]);
+    }
+
+    #[aztec(public)]
+    internal fn set_divinity_bjj_public_key(divinity_bjj_public_key: Field) {
+        storage.divinity_bjj_public_key.write(divinity_bjj_public_key);
     }
 
     /////////////////////////////////////////////////////////////////////
