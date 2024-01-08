@@ -3,3 +3,4 @@ mod config_note;
 mod result_note;
 mod token;
 mod oracle;
+mod gaffine;

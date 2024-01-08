@@ -29,7 +29,8 @@ contract CoinToss {
             RecipientSettleEscrowStruct,
             TokenPrivateContextInterface, 
             ToTransferStruct
-        }
+        },
+        gaffine::{GaffineSerializationMethods, GAFFINE_SERIALIZED_LEN}
     };
 
     use dep::aztec::{
@@ -48,11 +49,22 @@ contract CoinToss {
         selector::compute_selector,
         state_vars::{
             immutable_singleton::ImmutableSingleton,
-            set::Set
+            set::Set,
+            map::Map, 
+            public_state::PublicState
         },
-        types::address::AztecAddress
+        types::{
+            address::AztecAddress,
+            type_serialization::field_serialization::{FieldSerializationMethods, FIELD_SERIALIZED_LEN},
+        },
     };
 
+    use dep::noir_elgamal;
+
+    use dep::std;
+    use dep::std::ec::tecurve::affine::Curve as AffineCurve;
+    use dep::std::ec::tecurve::affine::Point as Gaffine;
+    use dep::std::collections::vec::Vec;
     use dep::std::option::Option;
 
     /////////////////////////////////////////////////////////////////////
@@ -62,17 +74,23 @@ contract CoinToss {
     global CONFIG_NOTE_SLOT = 1;
     global BETS_SLOT = 2;
     global RESULT_SLOT = 3;
+    global NUMBER_OF_TAILS_SLOT = 4;
+    global DIVINITY_PUBLIC_KEY_SLOT = 5;
 
     /// @member config The config note, containing the divinity address, the private oracle address, the house address, the token address and the bet amount
     /// @member bets The set of bet notes (ie active bets)
     /// @member results The set of result notes (ie settled bets)
+    /// @member number_of_tails The number of tails for each bet, encrypted
+    /// @member divinity_public_key The divinity public key used to add to the number of tails variable
     struct Storage {
         config: ImmutableSingleton<ConfigNote, CONFIG_NOTE_LEN>,
         bets: Set<BetNote, BET_NOTE_LEN>,
-        results: Set<ResultNote, RESULT_NOTE_LEN>
+        results: Set<ResultNote, RESULT_NOTE_LEN>,
+        number_of_tails: Map<PublicState<Gaffine, GAFFINE_SERIALIZED_LEN>>,
+        divinity_public_key: PublicState<Field, FIELD_SERIALIZED_LEN>,
     }
 
-    impl Storage {
+    impl Storage { 
         fn init(context: Context) -> Self {
             Storage {
                 config: ImmutableSingleton::new(
@@ -81,7 +99,23 @@ contract CoinToss {
                     ConfigNoteMethods,
                 ),
                 bets: Set::new(context, BETS_SLOT, BetNoteMethods),
-                results: Set::new(context, RESULT_SLOT, ResultNoteMethods)
+                results: Set::new(context, RESULT_SLOT, ResultNoteMethods),
+                number_of_tails: Map::new(
+                    context,
+                    NUMBER_OF_TAILS_SLOT,
+                    |context, slot| {
+                        PublicState::new(
+                            context,
+                            slot,
+                            GaffineSerializationMethods
+                        )
+                    },
+                ),
+                divinity_public_key: PublicState::new( 
+                    context,
+                    DIVINITY_PUBLIC_KEY_SLOT,
+                    FieldSerializationMethods,
+                ),
             }
         }
     }
